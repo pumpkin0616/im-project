@@ -25,6 +25,7 @@
 - Redis 在线连接租约、条件续租/删除和按用户批量路由查询。
 - RocketMQ `MESSAGE_CREATED` 消费、在线 `MESSAGE` 推送和跨网关批量 Dispatch。
 - 批量离线同步、WebSocket/HTTP 已读游标更新和单聊已读回执。
+- React + TypeScript Web 客户端、IndexedDB 消息缓存、断线重连和端到端状态机。
 
 ## 本地构建
 
@@ -122,7 +123,7 @@ mvn spring-boot:run
 
 ## 当前边界与下一阶段
 
-当前已完成可靠消息写入、用户认证、好友关系、会话与成员权限、历史消息、附件、Netty WebSocket 网关、Redis 在线租约、RocketMQ 实时投递、跨网关 Dispatch、离线同步和已读回执。下一阶段实现 Web 客户端和端到端状态机；随后完成目录事件投影、路由迁移自动化与 3,000/9,000 条每秒压测。正式部署前还要把本地文件附件适配器替换为私有对象存储，并把初始静态路由替换为控制库路由快照。
+当前已完成可靠消息写入、用户认证、好友关系、会话与成员权限、历史消息、附件、Netty WebSocket 网关、Redis 在线租约、RocketMQ 实时投递、跨网关 Dispatch、离线同步、已读回执，以及 React Web 客户端。Web 使用与启动方式见 [第七阶段文档](docs/STAGE7_WEB_CLIENT.md)。下一阶段完成目录事件投影、路由迁移自动化与 3,000/9,000 条每秒压测。正式部署前还要把本地文件附件适配器替换为私有对象存储，并把初始静态路由替换为控制库路由快照。
 
 
 
@@ -131,12 +132,14 @@ cd /Users/xiakaiyan/Documents/code/ai-project/im-project
 
 mvn clean package
 
-docker compose --profile app up -d --build
+docker compose --profile app --profile web up -d --build
 
 docker compose exec -T mysql \
   mysql -uroot -plocal-root \
   < sql/010_local_fixture.sql
 
 docker compose --profile app ps
+
+# Web 页面：http://127.0.0.1:3000
 
 python3 scripts/smoke-test.py
