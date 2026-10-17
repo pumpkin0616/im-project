@@ -1,0 +1,130 @@
+name: im-local
+
+services:
+  mysql:
+    image: mysql:8.4
+    environment:
+      MYSQL_ROOT_PASSWORD: local-root
+      TZ: UTC
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_0900_ai_ci
+      - --default-time-zone=+00:00
+      - --innodb-flush-log-at-trx-commit=1
+      - --sync-binlog=1
+    ports:
+      - "3307:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ./sql/001_control_schema.sql:/docker-entrypoint-initdb.d/001_control_schema.sql:ro
+      - ./sql/002_message_shard_schema.sql:/docker-entrypoint-initdb.d/002_message_shard_schema.sql:ro
+      - ./infra/mysql/003_local_access.sql:/docker-entrypoint-initdb.d/003_local_access.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p$$MYSQL_ROOT_PASSWORD --silent"]
+      interval: 3s
+      timeout: 3s
+      retries: 40
+      start_period: 20s
+    restart: unless-stopped
+
+  namesrv:
+    image: apache/rocketmq:5.3.2
+    command: sh mqnamesrv
+    environment:
+      JAVA_OPT_EXT: "-Xms256m -Xmx256m -Xmn128m"
+    ports:
+      - "9876:9876"
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c '</dev/tcp/127.0.0.1/9876'"]
+      interval: 3s
+      timeout: 3s
+      retries: 40
+      start_period: 15s
+    restart: unless-stopped
+
+  rocketmq-store-init:
+    image: apache/rocketmq:5.3.2
+    user: root
+    command: sh -c "chown -R 3000:3000 /home/rocketmq/store"
+    volumes:
+      - rocketmq-store:/home/rocketmq/store
+    restart: "no"
+
+  broker:
+    image: apache/rocketmq:5.3.2
+    command: >-
+      sh mqbroker --enable-proxy
+      -c /home/rocketmq/rocketmq-5.3.2/conf/local-broker.conf
+    environment:
+      NAMESRV_ADDR: namesrv:9876
+      JAVA_OPT_EXT: "-Xms768m -Xmx768m -Xmn384m"
+    ports:
+      - "10909:10909"
+      - "10911:10911"
+      - "10912:10912"
+      - "8081:8081"
+    volumes:
+      - ./infra/rocketmq/broker.conf:/home/rocketmq/rocketmq-5.3.2/conf/local-broker.conf:ro
+      - rocketmq-store:/home/rocketmq/store
+    depends_on:
+      namesrv:
+        condition: service_healthy
+      rocketmq-store-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c '</dev/tcp/127.0.0.1/8081'"]
+      interval: 5s
+      timeout: 3s
+      retries: 40
+      start_period: 30s
+    restart: unless-stopped
+
+  rocketmq-init:
+    image: apache/rocketmq:5.3.2
+    environment:
+      NAMESRV_ADDR: namesrv:9876
+    depends_on:
+      broker:
+        condition: service_healthy
+    command: >-
+      sh -c "sh mqadmin updatetopic
+      -n namesrv:9876
+      -b broker:10911
+      -t im-message-events
+      -r 64 -w 64
+      -o true
+      -a +message.type=FIFO"
+    restart: "no"
+
+  app:
+    profiles: ["app"]
+    build:
+      context: .
+    environment:
+      IM_DB_URL: jdbc:mysql://mysql:3306/im_message?useUnicode=true&characterEncoding=utf8&serverTimezone=UTC
+      # jdbc:mysql://127.0.0.1:3306/im_message?useUnicode=true&characterEncoding=utf8&serverTimezone=UTC
+      IM_DB_USERNAME: im_app
+      IM_DB_PASSWORD: im_app
+      IM_LOCAL_SHARD_ID: shard-0
+      IM_ROCKETMQ_ENABLED: "true"
+      IM_ROCKETMQ_ENDPOINTS: broker:8081
+    ports:
+      - "18080:8080"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      broker:
+        condition: service_healthy
+      rocketmq-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O- http://127.0.0.1:8080/actuator/health/readiness | grep -q UP"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 20s
+    restart: unless-stopped
+
+volumes:
+  mysql-data:
+  rocketmq-store:

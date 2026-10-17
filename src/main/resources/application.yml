@@ -1,0 +1,51 @@
+spring:
+  application:
+    name: im-project
+  datasource:
+    url: ${IM_DB_URL:jdbc:mysql://127.0.0.1:3307/im_message?useUnicode=true&characterEncoding=utf8&serverTimezone=UTC}
+    username: ${IM_DB_USERNAME:im_app}
+    password: ${IM_DB_PASSWORD:im_app}
+    hikari:
+      maximum-pool-size: ${IM_DB_POOL_SIZE:16}
+      minimum-idle: ${IM_DB_MIN_IDLE:2}
+      connection-timeout: 2000
+      validation-timeout: 1000
+  flyway:
+    enabled: ${IM_FLYWAY_ENABLED:false}
+  jackson:
+    default-property-inclusion: non_null
+
+server:
+  port: ${IM_HTTP_PORT:8080}
+  shutdown: graceful
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+
+im:
+  routing:
+    slot-count: 1024
+    table-group-count: 8
+    hash-seed: 0
+    local-shard-id: ${IM_LOCAL_SHARD_ID:shard-0}
+  message:
+    automatic-retry-window: 24h
+    max-clock-skew: 5m
+  rocketmq:
+    enabled: ${IM_ROCKETMQ_ENABLED:false}
+    endpoints: ${IM_ROCKETMQ_ENDPOINTS:127.0.0.1:8081}
+    message-topic: ${IM_ROCKETMQ_MESSAGE_TOPIC:im-message-events}
+    producer-identity: ${IM_ROCKETMQ_PRODUCER_IDENTITY:im-outbox-publisher}
+    outbox-batch-size: ${IM_OUTBOX_BATCH_SIZE:200}
+    outbox-max-in-flight: ${IM_OUTBOX_MAX_IN_FLIGHT:2000}
+    outbox-lease: ${IM_OUTBOX_LEASE:30s}
+    outbox-max-attempts: ${IM_OUTBOX_MAX_ATTEMPTS:100}
+    outbox-poll-interval-ms: ${IM_OUTBOX_POLL_INTERVAL_MS:100}
+
