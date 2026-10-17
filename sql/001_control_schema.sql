@@ -92,6 +92,14 @@ CREATE TABLE conversation_routes (
     CONSTRAINT ck_conversation_routes_state CHECK (state IN (1, 2, 3))
 ) ENGINE=InnoDB;
 
+CREATE TABLE direct_conversations (
+    direct_key       BINARY(32) NOT NULL,
+    conversation_id  BINARY(16) NOT NULL,
+    created_at       DATETIME(3) NOT NULL,
+    PRIMARY KEY (direct_key),
+    UNIQUE KEY uk_direct_conversations_id (conversation_id)
+) ENGINE=InnoDB;
+
 CREATE TABLE migration_jobs (
     id                  BINARY(16) NOT NULL,
     scope_type          TINYINT UNSIGNED NOT NULL COMMENT '1 slot, 2 conversation',

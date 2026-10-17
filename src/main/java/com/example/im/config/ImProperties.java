@@ -40,6 +40,7 @@ public record ImProperties(
             boolean enabled,
             String endpoints,
             String messageTopic,
+            String membershipTopic,
             String producerIdentity,
             int outboxBatchSize,
             int outboxMaxInFlight,

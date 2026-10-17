@@ -16,6 +16,7 @@
 - BCrypt 密码存储、JWT 访问令牌和可轮换的随机刷新令牌。
 - 用户注册、登录、刷新、退出和个人资料接口。
 - 好友申请、接受、拒绝、好友列表、删除好友及拉黑接口。
+- 唯一单聊、群聊创建、会话目录、成员管理和群角色权限。
 
 ## 本地构建
 
@@ -102,11 +103,11 @@ IM_DB_URL='jdbc:mysql://127.0.0.1:3307/im_message?useUnicode=true&characterEncod
 mvn spring-boot:run
 ```
 
-发送接口为 `POST /api/v1/messages`，需要携带登录接口签发的 `Authorization: Bearer <accessToken>`。请求中的 `clientMsgId` 必须是 UUIDv7，服务端会拒绝早于 24 小时或超前超过 5 分钟的值。第二阶段认证与好友接口见 [接口文档](docs/STAGE2_API.md)。
+发送接口为 `POST /api/v1/messages`，需要携带登录接口签发的 `Authorization: Bearer <accessToken>`。请求中的 `clientMsgId` 必须是 UUIDv7，服务端会拒绝早于 24 小时或超前超过 5 分钟的值。认证与好友接口见 [第二阶段文档](docs/STAGE2_API.md)，会话与群组接口见 [第三阶段文档](docs/STAGE3_API.md)。
 
 ## 当前边界与下一阶段
 
-当前提交是“可靠消息写入”纵向切片。创建会话、好友和群组管理、Netty WebSocket 网关、RocketMQ 消费投递、离线同步、已读回执、前端和压测工程仍需按技术方案继续实现。正式部署前还要把初始静态路由替换为控制库路由快照，并为死锁和瞬态数据库错误加入有界重试。
+当前已完成可靠消息写入、用户认证、好友关系、唯一单聊、群聊与成员权限。下一阶段实现历史消息分页、附件上传和会话目录游标；Netty WebSocket 网关、RocketMQ 消费投递、离线同步、已读回执、Web 前端和压测工程随后按技术方案推进。正式部署前还要把初始静态路由替换为控制库路由快照，并把目录更新完全切换为消费 `im-membership-events` 的幂等投影。
 
 
 

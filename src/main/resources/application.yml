@@ -47,6 +47,7 @@ im:
     enabled: ${IM_ROCKETMQ_ENABLED:false}
     endpoints: ${IM_ROCKETMQ_ENDPOINTS:127.0.0.1:8081}
     message-topic: ${IM_ROCKETMQ_MESSAGE_TOPIC:im-message-events}
+    membership-topic: ${IM_ROCKETMQ_MEMBERSHIP_TOPIC:im-membership-events}
     producer-identity: ${IM_ROCKETMQ_PRODUCER_IDENTITY:im-outbox-publisher}
     outbox-batch-size: ${IM_OUTBOX_BATCH_SIZE:200}
     outbox-max-in-flight: ${IM_OUTBOX_MAX_IN_FLIGHT:2000}

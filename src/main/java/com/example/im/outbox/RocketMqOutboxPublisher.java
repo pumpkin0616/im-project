@@ -20,6 +20,7 @@ final class RocketMqOutboxPublisher implements OutboxEventPublisher {
     private final Producer producer;
     private final ObjectMapper objectMapper;
     private final String topic;
+    private final String membershipTopic;
 
     RocketMqOutboxPublisher(ClientServiceProvider provider, Producer producer,
                             ObjectMapper objectMapper, ImProperties properties) {
@@ -27,12 +28,13 @@ final class RocketMqOutboxPublisher implements OutboxEventPublisher {
         this.producer = producer;
         this.objectMapper = objectMapper;
         this.topic = properties.rocketmq().messageTopic();
+        this.membershipTopic = properties.rocketmq().membershipTopic();
     }
 
     @Override
     public CompletableFuture<Void> publish(OutboxEvent event) {
         Message message = provider.newMessageBuilder()
-                .setTopic(topic)
+                .setTopic(event.eventType().startsWith("MESSAGE_") ? topic : membershipTopic)
                 .setTag(event.eventType())
                 .setKeys(event.eventId().toString())
                 .setMessageGroup(event.conversationId().toString())

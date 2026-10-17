@@ -19,6 +19,7 @@ services:
       - ./sql/001_control_schema.sql:/docker-entrypoint-initdb.d/001_control_schema.sql:ro
       - ./sql/002_message_shard_schema.sql:/docker-entrypoint-initdb.d/002_message_shard_schema.sql:ro
       - ./infra/mysql/003_local_access.sql:/docker-entrypoint-initdb.d/003_local_access.sql:ro
+      - ./sql/011_stage3_conversation_schema.sql:/docker-entrypoint-initdb.d/004_stage3_conversation_schema.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p$$MYSQL_ROOT_PASSWORD --silent"]
       interval: 3s
@@ -92,6 +93,13 @@ services:
       -b broker:10911
       -t im-message-events
       -r 64 -w 64
+      -o true
+      -a +message.type=FIFO
+      && sh mqadmin updatetopic
+      -n namesrv:9876
+      -b broker:10911
+      -t im-membership-events
+      -r 32 -w 32
       -o true
       -a +message.type=FIFO"
     restart: "no"
