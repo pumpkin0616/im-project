@@ -30,6 +30,11 @@ management:
         enabled: true
 
 im:
+  auth:
+    issuer: ${IM_AUTH_ISSUER:im-local}
+    jwt-secret: ${IM_AUTH_JWT_SECRET:local-development-secret-change-me-32-bytes}
+    access-token-ttl: ${IM_AUTH_ACCESS_TOKEN_TTL:15m}
+    refresh-token-ttl: ${IM_AUTH_REFRESH_TOKEN_TTL:30d}
   routing:
     slot-count: 1024
     table-group-count: 8

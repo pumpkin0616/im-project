@@ -24,14 +24,16 @@ def uuid7() -> str:
     return f"{text[:8]}-{text[8:12]}-{text[12:16]}-{text[16:20]}-{text[20:]}"
 
 
-def request(path: str, body: dict | None = None) -> tuple[int, dict]:
+def request(path: str, body: dict | None = None, token: str | None = None) -> tuple[int, dict]:
     headers = {"Accept": "application/json"}
     data = None
     method = "GET"
     if body is not None:
         method = "POST"
-        headers.update({"Content-Type": "application/json", "X-User-Id": USER_ID})
+        headers.update({"Content-Type": "application/json"})
         data = json.dumps(body).encode()
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
     req = urllib.request.Request(BASE_URL + path, data=data, headers=headers, method=method)
     try:
         with urllib.request.urlopen(req, timeout=10) as response:
@@ -43,6 +45,13 @@ def request(path: str, body: dict | None = None) -> tuple[int, dict]:
 health_status, health = request("/actuator/health/readiness")
 assert health_status == 200 and health["status"] == "UP", (health_status, health)
 
+login_status, login = request("/api/v1/auth/login", {
+    "account": "local-user", "password": "local-password",
+    "deviceId": "0199f120-0000-7000-8000-000000000010",
+})
+assert login_status == 200, (login_status, login)
+access_token = login["accessToken"]
+
 client_message_id = uuid7()
 message = {
     "conversationId": CONVERSATION_ID,
@@ -52,21 +61,22 @@ message = {
     "attachmentIds": [],
 }
 
-first_status, first = request("/api/v1/messages", message)
+first_status, first = request("/api/v1/messages", message, access_token)
 assert first_status == 201 and first["replayed"] is False, (first_status, first)
 
-replay_status, replay = request("/api/v1/messages", message)
+replay_status, replay = request("/api/v1/messages", message, access_token)
 assert replay_status == 201 and replay["replayed"] is True, (replay_status, replay)
 assert replay["messageId"] == first["messageId"] and replay["seq"] == first["seq"]
 
 conflicting = {**message, "content": {"text": "conflicting-content"}}
-conflict_status, conflict = request("/api/v1/messages", conflicting)
+conflict_status, conflict = request("/api/v1/messages", conflicting, access_token)
 assert conflict_status == 409 and conflict["code"] == "IDEMPOTENCY_CONFLICT", (
     conflict_status,
     conflict,
 )
 
 print("PASS: service is ready")
+print("PASS: local user authenticated with a JWT access token")
 print(f"PASS: message created, messageId={first['messageId']}, seq={first['seq']}")
 print("PASS: identical retry returned the original message")
 print("PASS: conflicting retry was rejected with HTTP 409")

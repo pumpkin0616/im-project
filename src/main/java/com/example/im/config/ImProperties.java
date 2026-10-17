@@ -8,7 +8,8 @@ import java.time.Duration;
 public record ImProperties(
         Routing routing,
         Message message,
-        RocketMq rocketmq
+        RocketMq rocketmq,
+        Auth auth
 ) {
     public record Routing(int slotCount, int tableGroupCount, long hashSeed, String localShardId) {
         public Routing {
@@ -25,6 +26,14 @@ public record ImProperties(
     }
 
     public record Message(Duration automaticRetryWindow, Duration maxClockSkew) {
+    }
+
+    public record Auth(String issuer, String jwtSecret, Duration accessTokenTtl, Duration refreshTokenTtl) {
+        public Auth {
+            if (jwtSecret == null || jwtSecret.getBytes(java.nio.charset.StandardCharsets.UTF_8).length < 32) {
+                throw new IllegalArgumentException("JWT secret must contain at least 32 bytes");
+            }
+        }
     }
 
     public record RocketMq(

@@ -1,6 +1,7 @@
 package com.example.im.message.api;
 
 import com.example.im.message.domain.MessageRejectedException;
+import com.example.im.common.ApiBusinessException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -12,6 +13,12 @@ import java.time.Clock;
 @RestControllerAdvice
 public final class ApiExceptionHandler {
     private final Clock clock = Clock.systemUTC();
+
+    @ExceptionHandler(ApiBusinessException.class)
+    ResponseEntity<ApiError> business(ApiBusinessException exception) {
+        return ResponseEntity.status(exception.status()).body(new ApiError(
+                exception.code(), exception.getMessage(), exception.retryable(), clock.instant()));
+    }
 
     @ExceptionHandler(MessageRejectedException.class)
     ResponseEntity<ApiError> rejected(MessageRejectedException exception) {

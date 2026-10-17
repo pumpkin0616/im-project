@@ -13,6 +13,9 @@
 - Outbox 多实例租约抢占、`SKIP LOCKED` 并发读取、失败退避、人工处理阈值。
 - RocketMQ 以 `conversationId` 作为 message group，以 `eventId` 作为消费幂等键。
 - 可执行的控制库和消息分片建表脚本。
+- BCrypt 密码存储、JWT 访问令牌和可轮换的随机刷新令牌。
+- 用户注册、登录、刷新、退出和个人资料接口。
+- 好友申请、接受、拒绝、好友列表、删除好友及拉黑接口。
 
 ## 本地构建
 
@@ -99,7 +102,7 @@ IM_DB_URL='jdbc:mysql://127.0.0.1:3307/im_message?useUnicode=true&characterEncod
 mvn spring-boot:run
 ```
 
-发送接口为 `POST /api/v1/messages`。当前迭代使用 `X-User-Id` 请求头作为开发期身份；接入网关后改为内部签名身份。请求中的 `clientMsgId` 必须是 UUIDv7，服务端会拒绝早于 24 小时或超前超过 5 分钟的值。
+发送接口为 `POST /api/v1/messages`，需要携带登录接口签发的 `Authorization: Bearer <accessToken>`。请求中的 `clientMsgId` 必须是 UUIDv7，服务端会拒绝早于 24 小时或超前超过 5 分钟的值。第二阶段认证与好友接口见 [接口文档](docs/STAGE2_API.md)。
 
 ## 当前边界与下一阶段
 

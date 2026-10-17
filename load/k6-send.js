@@ -3,6 +3,7 @@ import { check } from 'k6';
 import exec from 'k6/execution';
 
 const baseUrl = __ENV.BASE_URL || 'http://127.0.0.1:8080';
+const accessToken = __ENV.ACCESS_TOKEN;
 const identities = JSON.parse(__ENV.IM_IDENTITIES || '[]');
 
 if (identities.length === 0) {
@@ -55,7 +56,7 @@ export default function () {
   const response = http.post(`${baseUrl}/api/v1/messages`, body, {
     headers: {
       'Content-Type': 'application/json',
-      'X-User-Id': identity.userId,
+      Authorization: `Bearer ${accessToken}`,
     },
     tags: { operation: 'send-message' },
   });

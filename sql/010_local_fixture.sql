@@ -1,4 +1,15 @@
 -- Deterministic development fixture routed to shard-0, table group 00, slot 31.
+USE im_control;
+
+INSERT INTO users(id, account, password_hash, nickname, status, auth_version, created_at, updated_at)
+VALUES (
+    UUID_TO_BIN('0199f120-0000-7000-8000-000000000001'),
+    'local-user',
+    '$2y$12$dFv/jLaSouQIwk.586t9Mugoj7sFGH3wF3GHDFqVI9fZ47FIBQvpK',
+    'Local User', 1, 1, UTC_TIMESTAMP(3), UTC_TIMESTAMP(3)
+)
+ON DUPLICATE KEY UPDATE nickname = VALUES(nickname), status = 1, updated_at = VALUES(updated_at);
+
 USE im_message;
 
 SET @conversation_id = UUID_TO_BIN('bd258e60-98b5-3334-9859-e0112b4562e9');
