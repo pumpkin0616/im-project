@@ -70,6 +70,6 @@ python3 scripts/stage6-smoke-test.py
 
 第七阶段脚本检查生产静态资源、SPA 回退、Nginx API 代理、认证会话和 WebSocket 票据；第六阶段脚本继续验证真实的双端 WebSocket 投递、断线同步和已读回执。
 
-## 当前边界
+## 后续扩展
 
-当前页面提供文本消息主链路。附件上传、好友管理页面、群成员管理页面、消息编辑/撤回、浏览器通知和 Service Worker 离线壳将在后续产品阶段补齐。生产认证建议把刷新令牌改为 `HttpOnly + Secure + SameSite` Cookie，进一步缩小 XSS 场景下的令牌暴露面。
+附件消息、群管理、个人资料、目录摘要和消息撤回已在[第九阶段](STAGE9_PRODUCT_COMPLETION.md)完成。浏览器通知和 Service Worker 离线壳仍可继续补充。生产认证建议把刷新令牌改为 `HttpOnly + Secure + SameSite` Cookie，进一步缩小 XSS 场景下的令牌暴露面。

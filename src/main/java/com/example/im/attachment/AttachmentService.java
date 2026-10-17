@@ -149,26 +149,34 @@ final class AttachmentService {
 
     AttachmentView get(UUID userId, UUID conversationId, UUID attachmentId) {
         Table table = table(conversationId);
-        requireActiveMember(table, conversationId, userId);
+        requireMember(table, conversationId, userId);
         Attachment value = attachment(table, conversationId, attachmentId);
-        requireVisible(value, userId);
+        requireVisible(table, conversationId, value, userId);
         return view(value, conversationId);
     }
 
     Download download(UUID userId, UUID conversationId, UUID attachmentId) {
         Table table = table(conversationId);
-        requireActiveMember(table, conversationId, userId);
+        requireMember(table, conversationId, userId);
         Attachment value = attachment(table, conversationId, attachmentId);
-        requireVisible(value, userId);
+        requireVisible(table, conversationId, value, userId);
         if (value.status() != 2) throw error("ATTACHMENT_NOT_READY", "Attachment is not ready", 409);
         Path path = objectPath(value.objectKey());
         if (!Files.isRegularFile(path)) throw error("ATTACHMENT_CONTENT_MISSING", "Attachment content is unavailable", 503);
         return new Download(path, value.fileName(), value.mimeType(), value.sizeBytes());
     }
 
-    private void requireVisible(Attachment value, UUID userId) {
+    private void requireVisible(Table table, UUID conversationId, Attachment value, UUID userId) {
         if (value.boundSeq() == null && !value.ownerId().equals(userId)) {
             throw error("ATTACHMENT_NOT_FOUND", "Attachment does not exist", 404);
+        }
+        if (value.boundSeq() != null) {
+            Integer recalled = jdbc.queryForObject("SELECT COUNT(*) FROM " + table.messages()
+                            + " WHERE conversation_id=? AND seq=? AND status=2", Integer.class,
+                    bytes(conversationId), value.boundSeq());
+            if (recalled != null && recalled > 0) {
+                throw error("ATTACHMENT_NOT_FOUND", "Attachment does not exist", 404);
+            }
         }
     }
 
@@ -203,6 +211,13 @@ final class AttachmentService {
         Integer count = jdbc.queryForObject("SELECT COUNT(*) FROM " + table.members()
                         + " m JOIN " + table.conversations() + " c ON c.id=m.conversation_id "
                         + "WHERE m.conversation_id=? AND m.user_id=? AND m.status=1 AND c.status=1",
+                Integer.class, bytes(conversationId), bytes(userId));
+        if (count == null || count == 0) throw error("NOT_A_MEMBER", "User is not an active conversation member", 403);
+    }
+
+    private void requireMember(Table table, UUID conversationId, UUID userId) {
+        Integer count = jdbc.queryForObject("SELECT COUNT(*) FROM " + table.members()
+                        + " WHERE conversation_id=? AND user_id=? AND status=1",
                 Integer.class, bytes(conversationId), bytes(userId));
         if (count == null || count == 0) throw error("NOT_A_MEMBER", "User is not an active conversation member", 403);
     }
@@ -269,14 +284,15 @@ final class AttachmentService {
         ResolvedRoute route = routes.resolve(conversationId);
         if (!route.shardId().equals(localShard)) throw error("ROUTE_MISMATCH", "Conversation belongs to " + route.shardId(), 503);
         MessageTableNames names = new MessageTableNames(route.tableGroup(), 0);
-        return new Table(route, names.conversations(), names.members(), names.attachments());
+        return new Table(route, names.conversations(), names.members(), names.messages(), names.attachments());
     }
 
     private byte[] bytes(UUID value) { return UuidCodec.toBytes(value); }
     private ApiBusinessException error(String code, String message, int status) { return new ApiBusinessException(code, message, status); }
 
     record Download(Path path, String fileName, String mimeType, long sizeBytes) {}
-    private record Table(ResolvedRoute route, String conversations, String members, String attachments) {}
+    private record Table(ResolvedRoute route, String conversations, String members,
+                         String messages, String attachments) {}
     private record Attachment(UUID id, UUID ownerId, String objectKey, String fileName,
                               String mimeType, long sizeBytes, byte[] sha256, int status,
                               Long boundSeq, Instant expiresAt, Instant createdAt) {}

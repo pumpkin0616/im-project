@@ -26,6 +26,10 @@
 - RocketMQ `MESSAGE_CREATED` 消费、在线 `MESSAGE` 推送和跨网关批量 Dispatch。
 - 批量离线同步、WebSocket/HTTP 已读游标更新和单聊已读回执。
 - React + TypeScript Web 客户端、IndexedDB 消息缓存、断线重连和端到端状态机。
+- 自定义 IM ID 搜索、好友申请角标、联系人目录、唯一单聊、删除好友和拉黑操作。
+- 两分钟内撤回自己的文本、图片和文件消息，撤回事件通过 Outbox 和 RocketMQ 顺序投递。
+- 会话摘要、未读数、单聊对象信息、50 条游标分页及实时目录刷新。
+- 头像上传、好友申请取消、黑名单查询/解除和完整群管理页面。
 
 ## 本地构建
 
@@ -119,11 +123,11 @@ IM_DB_URL='jdbc:mysql://127.0.0.1:3307/im_message?useUnicode=true&characterEncod
 mvn spring-boot:run
 ```
 
-发送接口为 `POST /api/v1/messages`，需要携带登录接口签发的 `Authorization: Bearer <accessToken>`。请求中的 `clientMsgId` 必须是 UUIDv7，服务端会拒绝早于 24 小时或超前超过 5 分钟的值。认证与好友接口见 [第二阶段文档](docs/STAGE2_API.md)，会话与群组接口见 [第三阶段文档](docs/STAGE3_API.md)，历史消息和附件接口见 [第四阶段文档](docs/STAGE4_API.md)，实时连接协议见 [第五阶段文档](docs/STAGE5_WEBSOCKET_GATEWAY.md)，实时投递与同步见 [第六阶段文档](docs/STAGE6_REALTIME_DELIVERY.md)。
+发送接口为 `POST /api/v1/messages`，需要携带登录接口签发的 `Authorization: Bearer <accessToken>`。请求中的 `clientMsgId` 必须是 UUIDv7，服务端会拒绝早于 24 小时或超前超过 5 分钟的值。认证与好友接口见 [第二阶段文档](docs/STAGE2_API.md)，会话与群组接口见 [第三阶段文档](docs/STAGE3_API.md)，历史消息和附件接口见 [第四阶段文档](docs/STAGE4_API.md)，实时连接协议见 [第五阶段文档](docs/STAGE5_WEBSOCKET_GATEWAY.md)，实时投递与同步见 [第六阶段文档](docs/STAGE6_REALTIME_DELIVERY.md)，联系人页面见 [第八阶段文档](docs/STAGE8_CONTACTS.md)。
 
 ## 当前边界与下一阶段
 
-当前已完成可靠消息写入、用户认证、好友关系、会话与成员权限、历史消息、附件、Netty WebSocket 网关、Redis 在线租约、RocketMQ 实时投递、跨网关 Dispatch、离线同步、已读回执，以及 React Web 客户端。Web 使用与启动方式见 [第七阶段文档](docs/STAGE7_WEB_CLIENT.md)。下一阶段完成目录事件投影、路由迁移自动化与 3,000/9,000 条每秒压测。正式部署前还要把本地文件附件适配器替换为私有对象存储，并把初始静态路由替换为控制库路由快照。
+当前已完成可靠消息写入、用户认证、好友关系、会话与成员权限、历史消息、附件、消息撤回、Netty WebSocket 网关、Redis 在线租约、RocketMQ 实时投递、跨网关 Dispatch、离线同步、已读回执、实时目录通知及完整 React Web 客户端。Web 使用与启动方式见 [第七阶段文档](docs/STAGE7_WEB_CLIENT.md)，联系人功能见 [第八阶段文档](docs/STAGE8_CONTACTS.md)，产品闭环与撤回见 [第九阶段文档](docs/STAGE9_PRODUCT_COMPLETION.md)。下一阶段聚焦路由迁移自动化与 3,000/9,000 条每秒压测。
 
 
 

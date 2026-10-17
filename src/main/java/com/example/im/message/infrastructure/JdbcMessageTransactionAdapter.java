@@ -118,7 +118,9 @@ public class JdbcMessageTransactionAdapter implements MessageTransactionPort {
         UUID eventId = uuidGenerator.next();
 
         updateConversation(tables, command.conversationId(), sequence, serverTime);
+        updateDirectory(command.conversationId(), sequence, serverTime);
         insertMessage(tables, route.slotId(), command, messageId, sequence, messageDay, serverTime);
+        advanceSenderReadCursor(tables, command, sequence);
         insertDedup(tables, route.slotId(), command, requestHash,
                 messageId, sequence, messageDay, serverTime);
         bindAttachments(tables, command, sequence);
@@ -244,6 +246,13 @@ public class JdbcMessageTransactionAdapter implements MessageTransactionPort {
                 Timestamp.valueOf(serverTime), UuidCodec.toBytes(conversationId)));
     }
 
+    private void updateDirectory(UUID conversationId, long sequence, LocalDateTime serverTime) {
+        jdbc.update("UPDATE im_directory.user_conversations SET last_activity_at=?,last_known_seq=?,updated_at=? "
+                        + "WHERE conversation_id=? AND status=1",
+                Timestamp.valueOf(serverTime), sequence, Timestamp.valueOf(serverTime),
+                UuidCodec.toBytes(conversationId));
+    }
+
     private void insertMessage(MessageTableNames tables, int slotId, SendMessageCommand command,
                                UUID messageId, long sequence, LocalDate day, LocalDateTime serverTime) {
         String sql = "INSERT INTO " + tables.messages()
@@ -274,6 +283,12 @@ public class JdbcMessageTransactionAdapter implements MessageTransactionPort {
                     + " SET bound_seq = ? WHERE id = ? AND bound_seq IS NULL";
             requireOneRow(jdbc.update(sql, sequence, UuidCodec.toBytes(attachmentId)));
         }
+    }
+
+    private void advanceSenderReadCursor(MessageTableNames tables, SendMessageCommand command, long sequence) {
+        jdbc.update("UPDATE " + tables.members() + " SET last_read_seq=GREATEST(last_read_seq,?) "
+                        + "WHERE conversation_id=? AND user_id=? AND status=1",
+                sequence, UuidCodec.toBytes(command.conversationId()), UuidCodec.toBytes(command.senderId()));
     }
 
     private void insertOutbox(MessageTableNames tables, int slotId, UUID conversationId,

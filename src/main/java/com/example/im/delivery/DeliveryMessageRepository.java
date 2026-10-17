@@ -16,6 +16,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.time.Instant;
 
 @Repository
 public class DeliveryMessageRepository {
@@ -65,6 +66,35 @@ public class DeliveryMessageRepository {
                 }, UuidCodec.toBytes(conversationId), sequence);
         return new DeliveryMessage(value.conversationId(), value.messageId(), value.sequence(), value.senderId(),
                 value.clientMessageId(), value.type(), value.content(), value.createdAt(), attachments, recipients);
+    }
+
+    RecallDelivery loadRecall(UUID conversationId, long sequence) {
+        ResolvedRoute route = routes.resolve(conversationId);
+        if (!localShard.equals(route.shardId())) throw new IllegalStateException("Recall event routed to wrong shard");
+        MessageTableNames tables = new MessageTableNames(route.tableGroup(), 0);
+        List<RecallDelivery> values = jdbc.query("SELECT message_id,recalled_by,recalled_at,status FROM "
+                        + tables.messages() + " WHERE conversation_id=? AND seq=?",
+                (rs, n) -> new RecallDelivery(conversationId,
+                        UuidCodec.fromBytes(rs.getBytes("message_id")), sequence,
+                        UuidCodec.fromBytes(rs.getBytes("recalled_by")),
+                        rs.getTimestamp("recalled_at").toInstant(), List.of()),
+                UuidCodec.toBytes(conversationId), sequence);
+        if (values.isEmpty()) throw new IllegalStateException("Recall event references a missing message");
+        List<UUID> recipients = jdbc.query("SELECT user_id FROM " + tables.members()
+                        + " WHERE conversation_id=? AND status=1 AND joined_seq < ?",
+                (rs, n) -> UuidCodec.fromBytes(rs.getBytes(1)), UuidCodec.toBytes(conversationId), sequence);
+        RecallDelivery value = values.getFirst();
+        return new RecallDelivery(value.conversationId(), value.messageId(), value.sequence(),
+                value.recalledBy(), value.recalledAt(), recipients);
+    }
+
+    record RecallDelivery(UUID conversationId, UUID messageId, long sequence, UUID recalledBy,
+                          Instant recalledAt, List<UUID> recipients) {
+        Map<String, Object> payload() {
+            return Map.of("conversationId", conversationId.toString(), "messageId", messageId.toString(),
+                    "seq", Long.toUnsignedString(sequence), "recalledBy", recalledBy.toString(),
+                    "recalledAt", recalledAt.toString());
+        }
     }
 
     private JsonNode json(String value) {

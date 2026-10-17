@@ -113,10 +113,15 @@ final class ConversationService {
         MemberState mine=member(m,id,user);
         if(mine==null||mine.status()!=1) throw error("NOT_A_MEMBER","User is not an active conversation member",403);
         List<ConversationView> values=jdbc.query("SELECT id,type,title,owner_id,status,last_seq,min_available_seq,member_version,last_message_at,created_at FROM "+c+" WHERE id=?",
-                (rs,n)->new ConversationView(UuidCodec.fromBytes(rs.getBytes("id")),typeName(rs.getInt("type")),rs.getString("title"),
-                        uuid(rs.getBytes("owner_id")),statusName(rs.getInt("status")),roleName(mine.role()),rs.getLong("last_seq"),
-                        rs.getLong("min_available_seq"),rs.getLong("member_version"),memberCount(m,id),instant(rs.getTimestamp("last_message_at")),
-                        rs.getTimestamp("created_at").toInstant(),includeMembers?members(m,id):null),b(id));
+                (rs,n)->{
+                    int type=rs.getInt("type"); long lastSeq=rs.getLong("last_seq");
+                    return new ConversationView(UuidCodec.fromBytes(rs.getBytes("id")),typeName(type),rs.getString("title"),
+                            uuid(rs.getBytes("owner_id")),statusName(rs.getInt("status")),roleName(mine.role()),lastSeq,
+                            rs.getLong("min_available_seq"),rs.getLong("member_version"),memberCount(m,id),instant(rs.getTimestamp("last_message_at")),
+                            rs.getTimestamp("created_at").toInstant(),includeMembers?members(m,id):null,
+                            mine.lastReadSeq(),Math.max(0,lastSeq-mine.lastReadSeq()),
+                            lastMessage(route,id,lastSeq),type==1?peer(m,id,user):null);
+                },b(id));
         if(values.isEmpty()) throw error("CONVERSATION_NOT_FOUND","Conversation does not exist",404);
         return values.getFirst();
     }
@@ -189,8 +194,8 @@ final class ConversationService {
             if(mine.role()!=3) throw error("OWNER_REQUIRED","Only the group owner can dissolve the group",403);
             long version=state.memberVersion()+1;
             jdbc.update("UPDATE "+c+" SET status=2,write_state=2,member_version=?,updated_at=UTC_TIMESTAMP(3) WHERE id=?",version,b(id));
-            jdbc.update("UPDATE "+m+" SET status=2,membership_version=?,left_at=UTC_TIMESTAMP(3) WHERE conversation_id=? AND status=1",version,b(id));
-            jdbc.update("UPDATE im_directory.user_conversations SET status=3,membership_version=?,updated_at=UTC_TIMESTAMP(3) WHERE conversation_id=?",version,b(id));
+            jdbc.update("UPDATE "+m+" SET membership_version=? WHERE conversation_id=? AND status=1",version,b(id));
+            jdbc.update("UPDATE im_directory.user_conversations SET status=1,membership_version=?,updated_at=UTC_TIMESTAMP(3) WHERE conversation_id=?",version,b(id));
             insertEvent(route,id,"CONVERSATION_DISSOLVED",Map.of("memberVersion",version),Instant.now());
         });
     }
@@ -233,14 +238,34 @@ final class ConversationService {
         MemberState value=member(table,conversation,user); if(value==null||value.status()!=1) throw error("NOT_A_MEMBER","User is not an active conversation member",403); return value;
     }
     private MemberState member(String table,UUID conversation,UUID user) {
-        List<MemberState> rows=jdbc.query("SELECT role,status FROM "+table+" WHERE conversation_id=? AND user_id=?",
-                (rs,n)->new MemberState(rs.getInt(1),rs.getInt(2)),b(conversation),b(user)); return rows.isEmpty()?null:rows.getFirst();
+        List<MemberState> rows=jdbc.query("SELECT role,status,last_read_seq FROM "+table+" WHERE conversation_id=? AND user_id=?",
+                (rs,n)->new MemberState(rs.getInt(1),rs.getInt(2),rs.getLong(3)),b(conversation),b(user)); return rows.isEmpty()?null:rows.getFirst();
     }
     private List<MemberView> members(String table,UUID id) {
         return jdbc.query("SELECT m.user_id,u.account,u.nickname,u.avatar_key,m.role,m.joined_seq,m.last_read_seq,m.joined_at FROM "+table+" m JOIN im_control.users u ON u.id=m.user_id WHERE m.conversation_id=? AND m.status=1 ORDER BY m.role DESC,m.joined_at,m.user_id",
                 (rs,n)->new MemberView(UuidCodec.fromBytes(rs.getBytes(1)),rs.getString(2),rs.getString(3),rs.getString(4),roleName(rs.getInt(5)),rs.getLong(6),rs.getLong(7),rs.getTimestamp(8).toInstant()),b(id));
     }
     private int memberCount(String table,UUID id) { Integer n=jdbc.queryForObject("SELECT COUNT(*) FROM "+table+" WHERE conversation_id=? AND status=1",Integer.class,b(id)); return n==null?0:n; }
+    private PeerView peer(String table,UUID id,UUID user) {
+        List<PeerView> rows=jdbc.query("SELECT u.id,u.account,u.nickname,u.avatar_key FROM "+table+" m JOIN im_control.users u ON u.id=m.user_id WHERE m.conversation_id=? AND m.user_id<>? ORDER BY m.status LIMIT 1",
+                (rs,n)->{UUID peer=UuidCodec.fromBytes(rs.getBytes(1));return new PeerView(peer,rs.getString(2),rs.getString(3),
+                        rs.getString(4)==null?null:"/api/v1/users/"+peer+"/avatar");},b(id),b(user));
+        return rows.isEmpty()?null:rows.getFirst();
+    }
+    private LastMessageView lastMessage(ResolvedRoute route,UUID id,long sequence) {
+        if(sequence<1)return null;
+        String table=new MessageTableNames(route.tableGroup(),0).messages();
+        List<LastMessageView> rows=jdbc.query("SELECT seq,type,status,sender_id,content,created_at FROM "+table+" WHERE conversation_id=? AND seq=?",
+                (rs,n)->{int status=rs.getInt("status"),type=rs.getInt("type");String summary;
+                    if(status==2)summary="一条消息已撤回";
+                    else if(type==2)summary="[图片]";
+                    else if(type==3)summary="[文件]";
+                    else {try{String text=objectMapper.readTree(rs.getString("content")).path("text").asString("");summary=text.length()>80?text.substring(0,80):text;}
+                    catch(JacksonException e){summary="[消息]";}}
+                    return new LastMessageView(rs.getLong("seq"),typeNameForMessage(type),status==2?"RECALLED":"NORMAL",
+                            UuidCodec.fromBytes(rs.getBytes("sender_id")),summary,rs.getTimestamp("created_at").toInstant());},b(id),sequence);
+        return rows.isEmpty()?null:rows.getFirst();
+    }
     private void requireManager(MemberState member){if(member.role()<2)throw error("MANAGER_REQUIRED","Group administrator permission is required",403);}
     private void requireGroup(ConversationState state){if(state.type()!=2)throw error("GROUP_REQUIRED","This operation is only valid for group conversations",422);}
     private void requireActiveUsers(List<UUID> users) {
@@ -266,9 +291,10 @@ final class ConversationService {
     private byte[] b(UUID id){return UuidCodec.toBytes(id);} private UUID uuid(byte[] v){return v==null?null:UuidCodec.fromBytes(v);}
     private Instant instant(Timestamp value){return value==null?null:value.toInstant();}
     private String typeName(int type){return type==1?"DIRECT":"GROUP";} private String statusName(int status){return status==1?"ACTIVE":"DISSOLVED";}
+    private String typeNameForMessage(int type){return switch(type){case 1->"TEXT";case 2->"IMAGE";case 3->"FILE";default->"UNKNOWN";};}
     private String roleName(int role){return switch(role){case 3->"OWNER";case 2->"ADMIN";default->"MEMBER";};}
     private ApiBusinessException error(String code,String message,int status){return new ApiBusinessException(code,message,status);}
-    private record MemberState(int role,int status){} private record ConversationState(int type,int status,long lastSeq,long memberVersion){}
+    private record MemberState(int role,int status,long lastReadSeq){} private record ConversationState(int type,int status,long lastSeq,long memberVersion){}
     private record DirectoryEntry(UUID id,Instant activity){} private record DirectoryCursor(Instant activity,UUID id){}
     @FunctionalInterface private interface Mutation{void apply(ResolvedRoute route,String conversations,String members,ConversationState state);}
 }

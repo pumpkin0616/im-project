@@ -51,9 +51,10 @@ status,page=call("GET","/api/v1/conversations",token=to)
 assert status==200 and {direct["id"],gid}.issubset({x["id"] for x in page["items"]}),(status,page)
 status,_=call("POST",f"/api/v1/conversations/{gid}/leave",{},ta); assert status==204,status
 status,_=call("POST",f"/api/v1/conversations/{gid}/dissolve",{},to); assert status==204,status
-status,_=call("GET",f"/api/v1/conversations/{gid}",token=to); assert status in (403,422),status
+status,dissolved=call("GET",f"/api/v1/conversations/{gid}",token=to)
+assert status==200 and dissolved["status"]=="DISSOLVED",(status,dissolved)
 
 print("PASS: unique direct conversation creation")
 print("PASS: group creation, directory listing and member detail")
 print("PASS: owner/admin permissions, add/remove member and role change")
-print("PASS: member leave and owner dissolve")
+print("PASS: member leave and owner dissolve with read-only history access")

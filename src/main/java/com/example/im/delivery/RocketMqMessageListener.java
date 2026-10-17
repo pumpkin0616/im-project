@@ -36,11 +36,13 @@ public final class RocketMqMessageListener implements MessageListener {
             byte[] bytes = new byte[body.remaining()];
             body.get(bytes);
             JsonNode event = objectMapper.readTree(bytes);
-            if (!"MESSAGE_CREATED".equals(event.path("eventType").asString())) return ConsumeResult.SUCCESS;
+            String eventType = event.path("eventType").asString();
+            if (!"MESSAGE_CREATED".equals(eventType) && !"MESSAGE_RECALLED".equals(eventType)) return ConsumeResult.SUCCESS;
             UUID conversationId = UUID.fromString(event.path("conversationId").asString());
             long sequence = event.path("messageSequence").asLong();
             if (sequence < 1) throw new IllegalArgumentException("messageSequence is missing");
-            delivery.deliver(conversationId, sequence);
+            if ("MESSAGE_RECALLED".equals(eventType)) delivery.recall(conversationId, sequence);
+            else delivery.deliver(conversationId, sequence);
             success.increment();
             return ConsumeResult.SUCCESS;
         } catch (Exception exception) {

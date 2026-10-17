@@ -50,11 +50,32 @@ class RocketMqConfiguration {
                 .setClientConfiguration(clientConfiguration)
                 .setConsumerGroup(config.consumerGroup())
                 .setSubscriptionExpressions(Map.of(config.messageTopic(),
-                        new FilterExpression("MESSAGE_CREATED", FilterExpressionType.TAG)))
+                        new FilterExpression("MESSAGE_CREATED||MESSAGE_RECALLED", FilterExpressionType.TAG)))
                 .setMessageListener(listener)
                 .setConsumptionThreadCount(config.consumerThreads())
                 .setMaxCacheMessageCount(4096)
                 .setMaxCacheMessageSizeInBytes(128 * 1024 * 1024)
+                .build();
+    }
+
+    @Bean(destroyMethod = "close")
+    PushConsumer directoryEventConsumer(ClientServiceProvider provider, ImProperties properties,
+                                         com.example.im.delivery.DirectoryEventListener listener) throws ClientException {
+        ImProperties.RocketMq config = properties.rocketmq();
+        ClientConfiguration clientConfiguration = ClientConfiguration.newBuilder()
+                .setEndpoints(config.endpoints())
+                .addClientProperty("consumerIdentity", config.consumerGroup() + "-directory")
+                .build();
+        return provider.newPushConsumerBuilder()
+                .setClientConfiguration(clientConfiguration)
+                .setConsumerGroup(config.consumerGroup() + "-directory")
+                .setSubscriptionExpressions(Map.of(config.membershipTopic(),
+                        new FilterExpression("CONVERSATION_CREATED||CONVERSATION_UPDATED||CONVERSATION_DISSOLVED||MEMBERSHIP_CHANGED",
+                                FilterExpressionType.TAG)))
+                .setMessageListener(listener)
+                .setConsumptionThreadCount(Math.max(2, config.consumerThreads() / 4))
+                .setMaxCacheMessageCount(2048)
+                .setMaxCacheMessageSizeInBytes(32 * 1024 * 1024)
                 .build();
     }
 

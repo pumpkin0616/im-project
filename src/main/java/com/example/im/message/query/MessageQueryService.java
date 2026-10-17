@@ -52,14 +52,16 @@ final class MessageQueryService {
         long cursor = forward ? afterSeq : beforeSeq == null ? visibility.highWatermark() + 1 : beforeSeq;
         String comparator = forward ? ">" : "<";
         String order = forward ? "ASC" : "DESC";
-        String sql = "SELECT message_id,seq,sender_id,client_msg_id,type,content,created_at FROM "
+        String sql = "SELECT message_id,seq,sender_id,client_msg_id,type,status,content,created_at,recalled_by,recalled_at FROM "
                 + tables.messages() + " WHERE conversation_id=? AND seq " + comparator
                 + " ? AND seq>=? AND seq<=? ORDER BY seq " + order + " LIMIT ?";
         List<MessageView> rows = jdbc.query(sql, (rs, n) -> new MessageView(
                         UuidCodec.fromBytes(rs.getBytes("message_id")), rs.getLong("seq"),
                         UuidCodec.fromBytes(rs.getBytes("sender_id")),
                         UuidCodec.fromBytes(rs.getBytes("client_msg_id")), typeName(rs.getInt("type")),
-                        json(rs.getString("content")), rs.getTimestamp("created_at").toInstant(), List.of()),
+                        statusName(rs.getInt("status")), publicContent(rs.getInt("status"), rs.getString("content")),
+                        rs.getTimestamp("created_at").toInstant(), uuid(rs.getBytes("recalled_by")),
+                        instant(rs.getTimestamp("recalled_at")), List.of()),
                 bytes(conversationId), cursor, visibility.visibleFromSeq(),
                 visibility.highWatermark(), limit + 1);
 
@@ -82,12 +84,14 @@ final class MessageQueryService {
             throw error("MESSAGE_NOT_VISIBLE", "Message is outside the member's visible history", 403);
         }
         List<MessageView> values = jdbc.query(
-                "SELECT message_id,seq,sender_id,client_msg_id,type,content,created_at FROM "
+                "SELECT message_id,seq,sender_id,client_msg_id,type,status,content,created_at,recalled_by,recalled_at FROM "
                         + tables.messages() + " WHERE conversation_id=? AND seq=?",
                 (rs, n) -> new MessageView(UuidCodec.fromBytes(rs.getBytes("message_id")),
                         rs.getLong("seq"), UuidCodec.fromBytes(rs.getBytes("sender_id")),
                         UuidCodec.fromBytes(rs.getBytes("client_msg_id")), typeName(rs.getInt("type")),
-                        json(rs.getString("content")), rs.getTimestamp("created_at").toInstant(), List.of()),
+                        statusName(rs.getInt("status")), publicContent(rs.getInt("status"), rs.getString("content")),
+                        rs.getTimestamp("created_at").toInstant(), uuid(rs.getBytes("recalled_by")),
+                        instant(rs.getTimestamp("recalled_at")), List.of()),
                 bytes(conversationId), seq);
         if (values.isEmpty()) throw error("MESSAGE_NOT_FOUND", "Message does not exist", 404);
         return attach(tables.attachments(), conversationId, values).getFirst();
@@ -97,7 +101,7 @@ final class MessageQueryService {
         List<Visibility> values = jdbc.query("SELECT c.last_seq,c.min_available_seq,m.joined_seq "
                         + "FROM " + tables.conversations() + " c JOIN " + tables.members()
                         + " m ON m.conversation_id=c.id WHERE c.id=? AND m.user_id=? "
-                        + "AND c.status=1 AND m.status=1",
+                        + "AND m.status=1",
                 (rs, n) -> {
                     long minimum = rs.getLong("min_available_seq");
                     long joined = rs.getLong("joined_seq");
@@ -114,7 +118,11 @@ final class MessageQueryService {
         String marks = String.join(",", messages.stream().map(value -> "?").toList());
         List<Object> parameters = new ArrayList<>();
         parameters.add(bytes(conversationId));
-        messages.forEach(message -> parameters.add(message.seq()));
+        messages.stream().filter(message -> !"RECALLED".equals(message.status()))
+                .forEach(message -> parameters.add(message.seq()));
+        if (parameters.size() == 1) return messages;
+        marks = String.join(",", messages.stream().filter(message -> !"RECALLED".equals(message.status()))
+                .map(value -> "?").toList());
         Map<Long, List<AttachmentView>> bySequence = new HashMap<>();
         jdbc.query("SELECT id,bound_seq,file_name,mime_type,size_bytes,sha256 FROM " + table
                         + " WHERE conversation_id=? AND status=2 AND bound_seq IN (" + marks + ")",
@@ -129,8 +137,9 @@ final class MessageQueryService {
                     bySequence.computeIfAbsent(sequence, ignored -> new ArrayList<>()).add(value);
                 }, parameters.toArray());
         return messages.stream().map(message -> new MessageView(message.id(), message.seq(),
-                message.senderId(), message.clientMsgId(), message.type(), message.content(),
-                message.createdAt(), bySequence.getOrDefault(message.seq(), List.of()))).toList();
+                message.senderId(), message.clientMsgId(), message.type(), message.status(), message.content(),
+                message.createdAt(), message.recalledBy(), message.recalledAt(),
+                "RECALLED".equals(message.status()) ? List.of() : bySequence.getOrDefault(message.seq(), List.of()))).toList();
     }
 
     private Tables tables(UUID conversationId) {
@@ -150,9 +159,17 @@ final class MessageQueryService {
         }
     }
 
+    private JsonNode publicContent(int status, String value) {
+        return status == 2 ? objectMapper.createObjectNode() : json(value);
+    }
+
     private String typeName(int type) {
         return switch (type) { case 1 -> "TEXT"; case 2 -> "IMAGE"; case 3 -> "FILE"; default -> "UNKNOWN"; };
     }
+
+    private String statusName(int status) { return status == 2 ? "RECALLED" : "NORMAL"; }
+    private UUID uuid(byte[] value) { return value == null ? null : UuidCodec.fromBytes(value); }
+    private java.time.Instant instant(Timestamp value) { return value == null ? null : value.toInstant(); }
 
     private byte[] bytes(UUID value) { return UuidCodec.toBytes(value); }
     private ApiBusinessException error(String code, String message, int status) {

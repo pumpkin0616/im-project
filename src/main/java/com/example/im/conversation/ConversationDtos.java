@@ -20,9 +20,13 @@ final class ConversationDtos {
     enum Role { MEMBER, ADMIN }
     record MemberView(UUID userId, String account, String nickname, String avatarKey,
                       String role, long joinedSeq, long lastReadSeq, Instant joinedAt) {}
+    record PeerView(UUID userId, String account, String nickname, String avatarUrl) {}
+    record LastMessageView(long seq, String type, String status, UUID senderId,
+                           String summary, Instant createdAt) {}
     record ConversationView(UUID id, String type, String title, UUID ownerId, String status,
                             String myRole, long lastSeq, long minAvailableSeq, long memberVersion,
                             int memberCount, Instant lastMessageAt, Instant createdAt,
-                            List<MemberView> members) {}
+                            List<MemberView> members, long myLastReadSeq, long unreadCount,
+                            LastMessageView lastMessage, PeerView peer) {}
     record ConversationPage(List<ConversationView> items, boolean hasMore, String nextCursor) {}
 }

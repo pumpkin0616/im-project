@@ -93,8 +93,8 @@ final class AuthService {
     UserView me(UUID id) { return view(requireUser(id)); }
 
     UserView update(UUID id, UpdateProfileRequest request) {
-        int changed = jdbc.update("UPDATE im_control.users SET nickname=?,avatar_key=?,updated_at=UTC_TIMESTAMP(3) WHERE id=? AND status=1",
-                request.nickname().trim(), blankToNull(request.avatarKey()), UuidCodec.toBytes(id));
+        int changed = jdbc.update("UPDATE im_control.users SET nickname=?,updated_at=UTC_TIMESTAMP(3) WHERE id=? AND status=1",
+                request.nickname().trim(), UuidCodec.toBytes(id));
         if (changed != 1) throw new ApiBusinessException("USER_NOT_FOUND", "User does not exist", 404);
         return me(id);
     }

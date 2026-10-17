@@ -85,12 +85,17 @@ CREATE TABLE messages_00 (
     sender_id       BINARY(16) NOT NULL,
     client_msg_id   BINARY(16) NOT NULL,
     type            TINYINT UNSIGNED NOT NULL COMMENT '1 text, 2 image, 3 file',
+    status          TINYINT UNSIGNED NOT NULL DEFAULT 1 COMMENT '1 normal, 2 recalled',
     content         JSON NOT NULL,
+    recalled_by     BINARY(16) NULL,
+    recalled_at     DATETIME(3) NULL,
     created_at      DATETIME(3) NOT NULL,
     PRIMARY KEY (conversation_id, message_day, seq),
     KEY idx_messages_conversation_seq (conversation_id, seq),
     KEY idx_messages_slot_export (slot_id, message_day, conversation_id, seq),
-    CONSTRAINT ck_messages_type CHECK (type IN (1, 2, 3))
+    KEY idx_messages_recalled_at (recalled_at),
+    CONSTRAINT ck_messages_type CHECK (type IN (1, 2, 3)),
+    CONSTRAINT ck_messages_status CHECK (status IN (1, 2))
 ) ENGINE=InnoDB
 PARTITION BY RANGE COLUMNS(message_day) (
     PARTITION p20261017 VALUES LESS THAN ('2026-10-18'),

@@ -39,6 +39,22 @@ export type Conversation = {
   lastMessageAt?: string | null
   createdAt: string
   members?: Member[] | null
+  myLastReadSeq: number
+  unreadCount: number
+  lastMessage?: {
+    seq: number
+    type: 'TEXT' | 'IMAGE' | 'FILE' | 'UNKNOWN'
+    status: 'NORMAL' | 'RECALLED'
+    senderId: string
+    summary: string
+    createdAt: string
+  } | null
+  peer?: {
+    userId: string
+    account: string
+    nickname: string
+    avatarUrl?: string | null
+  } | null
 }
 
 export type Attachment = {
@@ -56,8 +72,11 @@ export type Message = {
   senderId: string
   clientMsgId: string
   type: 'TEXT' | 'IMAGE' | 'FILE' | 'UNKNOWN'
+  status: 'NORMAL' | 'RECALLED'
   content: { text?: string; [key: string]: unknown }
   createdAt: string
+  recalledBy?: string | null
+  recalledAt?: string | null
   attachments: Attachment[]
   delivery?: 'sending' | 'sent' | 'failed'
 }
@@ -83,3 +102,66 @@ export type GatewayEnvelope = {
 }
 
 export type ConnectionState = 'offline' | 'connecting' | 'online' | 'reconnecting'
+
+export type Friend = {
+  id: string
+  account: string
+  nickname: string
+  avatarKey?: string | null
+  friendsSince: string
+}
+
+export type FriendRequest = {
+  id: string
+  requesterId: string
+  requesterAccount: string
+  requesterNickname: string
+  recipientId: string
+  recipientAccount: string
+  recipientNickname: string
+  status: 0 | 1 | 2 | 3
+  note?: string | null
+  createdAt: string
+  handledAt?: string | null
+}
+
+export type UserRelationship = 'SELF' | 'FRIEND' | 'INCOMING_PENDING' | 'OUTGOING_PENDING' | 'BLOCKED' | 'NONE'
+
+export type UserSearchResult = {
+  id: string
+  account: string
+  nickname: string
+  avatarKey?: string | null
+  relationship: UserRelationship
+  pendingRequestId?: string | null
+  friend: boolean
+  pendingIncoming: boolean
+  pendingOutgoing: boolean
+  blockedByMe: boolean
+}
+
+export type BlockedUser = {
+  id: string
+  account: string
+  nickname: string
+  avatarKey?: string | null
+  blockedAt: string
+}
+
+export type RecallResult = {
+  conversationId: string
+  messageId: string
+  seq: number
+  recalledBy: string
+  recalledAt: string
+  status: 'RECALLED'
+}
+
+export type UploadTicket = {
+  id: string
+  conversationId: string
+  status: string
+  uploadUrl: string
+  completeUrl: string
+  expiresAt: string
+}

@@ -18,4 +18,9 @@ final class MessageDeliveryService {
         DeliveryMessage message = messages.load(conversationId, sequence);
         router.dispatch(message.recipients(), "MESSAGE", message.payload());
     }
+
+    void recall(UUID conversationId, long sequence) {
+        DeliveryMessageRepository.RecallDelivery recall = messages.loadRecall(conversationId, sequence);
+        router.dispatch(recall.recipients(), "MESSAGE_RECALLED", recall.payload());
+    }
 }

@@ -116,13 +116,20 @@ assert status==200 and any(item["id"]==ack["data"]["messageId"] for item in hist
 status,next_ticket=call("POST","/api/v1/ws/tickets",{},token); assert status==201,(status,next_ticket)
 next_ws=WebSocket(next_ticket["websocketUrl"]); assert next_ws.status==101,next_ws.status
 next_ready=next_ws.recv_json(); assert next_ready["op"]=="READY",next_ready
-reconnect=ws.recv_json(); assert reconnect["op"]=="RECONNECT" and reconnect["data"]["reason"]=="CONNECTION_REPLACED",reconnect
+reconnect=None
+for _ in range(10):
+    candidate=ws.recv_json()
+    if candidate["op"]=="RECONNECT":
+        reconnect=candidate; break
+assert reconnect and reconnect["data"]["reason"]=="CONNECTION_REPLACED",reconnect
 for _ in range(70):
     next_ws.send_json({"v":1,"op":"PING","requestId":str(uuid.uuid4()),"data":{}})
 rate_responses=[next_ws.recv_json() for _ in range(70)]
 assert any(value["op"]=="ERROR" and value["data"]["code"]=="RATE_LIMITED" for value in rate_responses),rate_responses
 next_ws.send_frame(1,b"x"*66000)
 opcode,close_payload=next_ws.recv_frame()
+while opcode==1:
+    opcode,close_payload=next_ws.recv_frame()
 assert opcode==8 and struct.unpack("!H",close_payload[:2])[0]==1009,(opcode,close_payload)
 next_ws.close(); ws.close()
 

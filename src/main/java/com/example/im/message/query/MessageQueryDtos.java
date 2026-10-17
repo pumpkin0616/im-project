@@ -13,7 +13,8 @@ public final class MessageQueryDtos {
                           String sha256, String downloadUrl) {}
 
     public record MessageView(UUID id, long seq, UUID senderId, UUID clientMsgId, String type,
-                       JsonNode content, Instant createdAt, List<AttachmentView> attachments) {}
+                       String status, JsonNode content, Instant createdAt,
+                       UUID recalledBy, Instant recalledAt, List<AttachmentView> attachments) {}
 
     public record MessagePage(List<MessageView> items, String direction, boolean hasMore,
                        Long nextBeforeSeq, Long nextAfterSeq, long minAvailableSeq,

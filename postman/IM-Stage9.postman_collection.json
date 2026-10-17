@@ -1,0 +1,111 @@
+{
+  "info": {
+    "_postman_id": "0a98737f-7f2e-4c9e-a71d-b09bd9065853",
+    "name": "IM Stage 9 - Product Completion",
+    "description": "Runnable requests for conversation summaries, recall, profile avatars, friend request cancellation, and block management. Set accessToken and resource IDs in the environment first.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }]
+  },
+  "item": [
+    {
+      "name": "Messages",
+      "item": [
+        {
+          "name": "Recall own message",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/api/v1/conversations/{{conversationId}}/messages/{{messageSeq}}/recall",
+            "body": { "mode": "raw", "raw": "{}" },
+            "description": "Only the sender may recall an active-conversation message within two minutes. Repeated calls are idempotent."
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "type": "text/javascript", "exec": [
+              "pm.test('recall succeeds', () => pm.response.to.have.status(200));",
+              "const body = pm.response.json();",
+              "pm.test('message is recalled', () => pm.expect(body.status).to.eql('RECALLED'));",
+              "pm.test('identity is stable', () => pm.expect(body.seq.toString()).to.eql(pm.environment.get('messageSeq')));"
+            ]}
+          }]
+        },
+        {
+          "name": "Read redacted history",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/v1/conversations/{{conversationId}}/messages?limit=50",
+            "description": "A recalled item has status RECALLED, empty content, and no attachments."
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "type": "text/javascript", "exec": [
+              "pm.test('history succeeds', () => pm.response.to.have.status(200));",
+              "const item = pm.response.json().items.find(x => x.seq.toString() === pm.environment.get('messageSeq'));",
+              "pm.test('recalled content is redacted', () => { pm.expect(item.status).to.eql('RECALLED'); pm.expect(item.content).to.eql({}); pm.expect(item.attachments).to.eql([]); });"
+            ]}
+          }]
+        }
+      ]
+    },
+    {
+      "name": "Conversation directory",
+      "item": [{
+        "name": "List first 50 conversations",
+        "request": { "method": "GET", "url": "{{baseUrl}}/api/v1/conversations?limit=50" },
+        "event": [{
+          "listen": "test",
+          "script": { "type": "text/javascript", "exec": [
+            "pm.test('directory succeeds', () => pm.response.to.have.status(200));",
+            "pm.test('summary contract exists', () => { const first = pm.response.json().items[0]; if (first) { pm.expect(first).to.have.property('myLastReadSeq'); pm.expect(first).to.have.property('unreadCount'); } });"
+          ]}
+        }]
+      }]
+    },
+    {
+      "name": "Contacts",
+      "item": [
+        {
+          "name": "Cancel pending request",
+          "request": { "method": "DELETE", "url": "{{baseUrl}}/api/v1/friend-requests/{{friendRequestId}}" }
+        },
+        {
+          "name": "List blocked users",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/v1/blocks" }
+        },
+        {
+          "name": "Unblock user",
+          "request": { "method": "DELETE", "url": "{{baseUrl}}/api/v1/blocks/{{userId}}" }
+        }
+      ]
+    },
+    {
+      "name": "Profile",
+      "item": [
+        {
+          "name": "Update nickname",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/api/v1/users/me",
+            "body": { "mode": "raw", "raw": "{\n  \"nickname\": \"新的昵称\"\n}" }
+          }
+        },
+        {
+          "name": "Upload avatar",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/v1/users/me/avatar",
+            "body": { "mode": "formdata", "formdata": [{ "key": "file", "type": "file", "src": "" }] }
+          }
+        },
+        {
+          "name": "Delete avatar",
+          "request": { "method": "DELETE", "url": "{{baseUrl}}/api/v1/users/me/avatar" }
+        }
+      ]
+    }
+  ]
+}

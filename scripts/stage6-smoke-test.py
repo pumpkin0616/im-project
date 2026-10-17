@@ -122,6 +122,20 @@ owner_message = owner_ws.receive(lambda x: x.get("op") == "MESSAGE" and x["data"
 member_message = member_ws.receive(lambda x: x.get("op") == "MESSAGE" and x["data"].get("messageId") == message_id)
 assert owner_message["data"]["seq"] == str(sequence) and member_message["data"]["seq"] == str(sequence)
 
+# Both devices are already online when a new group is created. Its first message must still
+# reach the invited member even though it was absent from the member's login-time directory.
+status, group = call("POST", "/api/v1/conversations/group", {
+    "title": "Realtime new group", "memberIds": [member["user"]["id"]]}, owner["accessToken"])
+assert status == 201, (status, group)
+group_request = str(uuid.uuid4())
+owner_ws.send_json({"v": 1, "op": "SEND", "requestId": group_request, "data": {
+    "conversationId": group["id"], "clientMsgId": uuid7(), "type": "TEXT",
+    "content": {"text": "new group realtime"}, "attachmentIds": []}})
+group_ack = owner_ws.receive(lambda x: x.get("op") == "SEND_ACK" and x.get("requestId") == group_request)
+group_message_id = group_ack["data"]["messageId"]
+owner_ws.receive(lambda x: x.get("op") == "MESSAGE" and x["data"].get("messageId") == group_message_id)
+member_ws.receive(lambda x: x.get("op") == "MESSAGE" and x["data"].get("messageId") == group_message_id)
+
 read_request = str(uuid.uuid4())
 member_ws.send_json({"v": 1, "op": "READ", "requestId": read_request,
                       "data": {"conversationId": conversation, "seq": str(sequence)}})
@@ -167,6 +181,7 @@ assert status == 401, status
 owner_ws.close()
 print("PASS: Redis leases expose both online devices to the delivery worker")
 print("PASS: RocketMQ MESSAGE_CREATED events push MESSAGE to both WebSocket clients")
+print("PASS: a group created after both clients connect pushes its first message to the invited member")
 print("PASS: READ persists a monotonic cursor and pushes direct-chat READ_UPDATE")
 print("PASS: POST /api/v1/sync returns messages missed while a device was offline")
 print("PASS: internal gateway Dispatch delivers batches and rejects missing shared secrets")
