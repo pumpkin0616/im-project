@@ -166,6 +166,7 @@ CREATE TABLE user_conversations (
     updated_at          DATETIME(3) NOT NULL,
     PRIMARY KEY (user_id, conversation_id),
     KEY idx_user_conversations_activity (user_id, status, last_activity_at, conversation_id),
+    KEY idx_user_conversations_conversation (conversation_id, status, user_id),
     CONSTRAINT ck_user_conversations_status CHECK (status IN (1, 2, 3))
 ) ENGINE=InnoDB;
 

@@ -47,8 +47,8 @@ assert status==200 and group["memberCount"]==4,(status,group)
 status,_=call("DELETE",f"/api/v1/conversations/{gid}/members/{bob['user']['id']}",token=ta)
 assert status==204,status
 status,_=call("GET",f"/api/v1/conversations/{gid}",token=tb); assert status==403,status
-status,items=call("GET","/api/v1/conversations",token=to)
-assert status==200 and {direct["id"],gid}.issubset({x["id"] for x in items}),(status,items)
+status,page=call("GET","/api/v1/conversations",token=to)
+assert status==200 and {direct["id"],gid}.issubset({x["id"] for x in page["items"]}),(status,page)
 status,_=call("POST",f"/api/v1/conversations/{gid}/leave",{},ta); assert status==204,status
 status,_=call("POST",f"/api/v1/conversations/{gid}/dissolve",{},to); assert status==204,status
 status,_=call("GET",f"/api/v1/conversations/{gid}",token=to); assert status in (403,422),status

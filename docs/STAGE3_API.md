@@ -6,7 +6,7 @@
 |---|---|---|
 | POST | `/api/v1/conversations/direct` | 创建或返回两人唯一单聊 |
 | POST | `/api/v1/conversations/group` | 创建群聊，当前用户成为群主 |
-| GET | `/api/v1/conversations` | 查询当前用户的会话目录 |
+| GET | `/api/v1/conversations?limit=50&cursor=...` | 游标分页查询当前用户的会话目录 |
 | GET | `/api/v1/conversations/{id}` | 查询会话和有效成员 |
 | PATCH | `/api/v1/conversations/{id}` | 群主或管理员修改群名 |
 | POST | `/api/v1/conversations/{id}/members` | 群主或管理员添加成员 |
@@ -18,6 +18,8 @@
 单聊要求双方已经是好友。同一对用户并发创建单聊时，`direct_key` 全局唯一约束保证最终只产生一个会话。
 
 群聊角色：`MEMBER`、`ADMIN`、`OWNER`。管理员不能移除其他管理员或群主；群主不能直接退群，需要先转让群主（后续接口）或解散群聊。
+
+会话目录响应从第四阶段起为 `{items, hasMore, nextCursor}`，客户端应原样回传不透明的 `nextCursor`。
 
 会话和成员变更与业务数据在同一事务中写入 Outbox，并以 `conversationId` 为 Message Group 发布到32队列的 FIFO Topic `im-membership-events`。本地环境同步维护用户会话目录；将目录库拆为独立实例后，可由目录消费者按 `memberVersion` 幂等更新。
 

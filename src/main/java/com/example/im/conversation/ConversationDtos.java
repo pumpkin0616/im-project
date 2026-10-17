@@ -24,4 +24,5 @@ final class ConversationDtos {
                             String myRole, long lastSeq, long minAvailableSeq, long memberVersion,
                             int memberCount, Instant lastMessageAt, Instant createdAt,
                             List<MemberView> members) {}
+    record ConversationPage(List<ConversationView> items, boolean hasMore, String nextCursor) {}
 }

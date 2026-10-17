@@ -3,13 +3,15 @@ package com.example.im.config;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 import java.time.Duration;
+import java.nio.file.Path;
 
 @ConfigurationProperties(prefix = "im")
 public record ImProperties(
         Routing routing,
         Message message,
         RocketMq rocketmq,
-        Auth auth
+        Auth auth,
+        Storage storage
 ) {
     public record Routing(int slotCount, int tableGroupCount, long hashSeed, String localShardId) {
         public Routing {
@@ -32,6 +34,20 @@ public record ImProperties(
         public Auth {
             if (jwtSecret == null || jwtSecret.getBytes(java.nio.charset.StandardCharsets.UTF_8).length < 32) {
                 throw new IllegalArgumentException("JWT secret must contain at least 32 bytes");
+            }
+        }
+    }
+
+    public record Storage(Path root, long maxAttachmentBytes, Duration uploadTtl) {
+        public Storage {
+            if (root == null) {
+                throw new IllegalArgumentException("storage root must not be null");
+            }
+            if (maxAttachmentBytes <= 0) {
+                throw new IllegalArgumentException("maxAttachmentBytes must be positive");
+            }
+            if (uploadTtl == null || uploadTtl.isNegative() || uploadTtl.isZero()) {
+                throw new IllegalArgumentException("uploadTtl must be positive");
             }
         }
     }

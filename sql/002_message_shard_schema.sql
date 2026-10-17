@@ -88,6 +88,7 @@ CREATE TABLE messages_00 (
     content         JSON NOT NULL,
     created_at      DATETIME(3) NOT NULL,
     PRIMARY KEY (conversation_id, message_day, seq),
+    KEY idx_messages_conversation_seq (conversation_id, seq),
     KEY idx_messages_slot_export (slot_id, message_day, conversation_id, seq),
     CONSTRAINT ck_messages_type CHECK (type IN (1, 2, 3))
 ) ENGINE=InnoDB

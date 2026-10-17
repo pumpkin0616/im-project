@@ -20,6 +20,7 @@ services:
       - ./sql/002_message_shard_schema.sql:/docker-entrypoint-initdb.d/002_message_shard_schema.sql:ro
       - ./infra/mysql/003_local_access.sql:/docker-entrypoint-initdb.d/003_local_access.sql:ro
       - ./sql/011_stage3_conversation_schema.sql:/docker-entrypoint-initdb.d/004_stage3_conversation_schema.sql:ro
+      - ./sql/012_stage4_history_attachment_schema.sql:/docker-entrypoint-initdb.d/005_stage4_history_attachment_schema.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p$$MYSQL_ROOT_PASSWORD --silent"]
       interval: 3s
@@ -116,8 +117,11 @@ services:
       IM_LOCAL_SHARD_ID: shard-0
       IM_ROCKETMQ_ENABLED: "true"
       IM_ROCKETMQ_ENDPOINTS: broker:8081
+      IM_STORAGE_ROOT: /app/data/attachments
     ports:
       - "18080:8080"
+    volumes:
+      - attachment-data:/app/data/attachments
     depends_on:
       mysql:
         condition: service_healthy
@@ -136,3 +140,4 @@ services:
 volumes:
   mysql-data:
   rocketmq-store:
+  attachment-data:

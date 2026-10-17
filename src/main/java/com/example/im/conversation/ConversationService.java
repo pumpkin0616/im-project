@@ -25,6 +25,8 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.UUID;
 import java.util.Map;
+import java.nio.charset.StandardCharsets;
+import java.util.Base64;
 
 @Service
 final class ConversationService {
@@ -86,12 +88,24 @@ final class ConversationService {
         return get(owner,id,true);
     }
 
-    List<ConversationView> list(UUID user,int limit) {
-        List<UUID> ids=jdbc.query("SELECT conversation_id FROM im_directory.user_conversations WHERE user_id=? AND status=1 ORDER BY last_activity_at DESC,conversation_id LIMIT ?",
-                (rs,n)->UuidCodec.fromBytes(rs.getBytes(1)),b(user),limit);
+    ConversationPage list(UUID user,int limit,String cursor) {
+        DirectoryCursor parsed=decodeCursor(cursor);
+        String filter=parsed==null?"":" AND (last_activity_at < ? OR (last_activity_at = ? AND conversation_id > ?))";
+        List<DirectoryEntry> entries;
+        if(parsed==null) {
+            entries=jdbc.query("SELECT conversation_id,last_activity_at FROM im_directory.user_conversations WHERE user_id=? AND status=1 ORDER BY last_activity_at DESC,conversation_id LIMIT ?",
+                    (rs,n)->new DirectoryEntry(UuidCodec.fromBytes(rs.getBytes(1)),rs.getTimestamp(2).toInstant()),b(user),limit+1);
+        } else {
+            Timestamp time=Timestamp.from(parsed.activity());
+            entries=jdbc.query("SELECT conversation_id,last_activity_at FROM im_directory.user_conversations WHERE user_id=? AND status=1"+filter+" ORDER BY last_activity_at DESC,conversation_id LIMIT ?",
+                    (rs,n)->new DirectoryEntry(UuidCodec.fromBytes(rs.getBytes(1)),rs.getTimestamp(2).toInstant()),b(user),time,time,b(parsed.id()),limit+1);
+        }
+        boolean hasMore=entries.size()>limit;
+        if(hasMore) entries=new ArrayList<>(entries.subList(0,limit));
         List<ConversationView> result=new ArrayList<>();
-        for(UUID id:ids) { try { result.add(get(user,id,false)); } catch(ApiBusinessException ignored) { } }
-        return result;
+        for(DirectoryEntry entry:entries) { try { result.add(get(user,entry.id(),false)); } catch(ApiBusinessException ignored) { } }
+        String next=hasMore&&!entries.isEmpty()?encodeCursor(entries.getLast()):null;
+        return new ConversationPage(result,hasMore,next);
     }
 
     ConversationView get(UUID user,UUID id,boolean includeMembers) {
@@ -241,6 +255,12 @@ final class ConversationService {
     private String conversations(ResolvedRoute route){return new MessageTableNames(route.tableGroup(),0).conversations();}
     private String members(ResolvedRoute route){return new MessageTableNames(route.tableGroup(),0).members();}
     private UUID findDirect(byte[] key){List<UUID> rows=jdbc.query("SELECT conversation_id FROM im_control.direct_conversations WHERE direct_key=?",(rs,n)->UuidCodec.fromBytes(rs.getBytes(1)),key);return rows.isEmpty()?null:rows.getFirst();}
+    private String encodeCursor(DirectoryEntry entry){String raw=entry.activity().toEpochMilli()+":"+entry.id();return Base64.getUrlEncoder().withoutPadding().encodeToString(raw.getBytes(StandardCharsets.US_ASCII));}
+    private DirectoryCursor decodeCursor(String cursor){
+        if(cursor==null||cursor.isBlank())return null;
+        try{String raw=new String(Base64.getUrlDecoder().decode(cursor),StandardCharsets.US_ASCII);int split=raw.indexOf(':');if(split<1)throw new IllegalArgumentException();return new DirectoryCursor(Instant.ofEpochMilli(Long.parseLong(raw.substring(0,split))),UUID.fromString(raw.substring(split+1)));}
+        catch(RuntimeException exception){throw error("INVALID_CURSOR","Conversation cursor is invalid",400);}
+    }
     private byte[] directKey(UUID a,UUID b){try{List<UUID> sorted=new ArrayList<>(List.of(a,b));sorted.sort(Comparator.comparing(UUID::toString));ByteBuffer bytes=ByteBuffer.allocate(32);sorted.forEach(x->bytes.put(b(x)));return MessageDigest.getInstance("SHA-256").digest(bytes.array());}catch(Exception e){throw new IllegalStateException(e);}}
     private boolean exists(String sql,Object... p){Integer n=jdbc.queryForObject(sql,Integer.class,p);return n!=null&&n>0;}
     private byte[] b(UUID id){return UuidCodec.toBytes(id);} private UUID uuid(byte[] v){return v==null?null:UuidCodec.fromBytes(v);}
@@ -249,5 +269,6 @@ final class ConversationService {
     private String roleName(int role){return switch(role){case 3->"OWNER";case 2->"ADMIN";default->"MEMBER";};}
     private ApiBusinessException error(String code,String message,int status){return new ApiBusinessException(code,message,status);}
     private record MemberState(int role,int status){} private record ConversationState(int type,int status,long lastSeq,long memberVersion){}
+    private record DirectoryEntry(UUID id,Instant activity){} private record DirectoryCursor(Instant activity,UUID id){}
     @FunctionalInterface private interface Mutation{void apply(ResolvedRoute route,String conversations,String members,ConversationState state);}
 }

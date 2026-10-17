@@ -25,9 +25,10 @@ public final class ConversationController {
     ConversationView group(@AuthenticationPrincipal Jwt jwt,@Valid @RequestBody CreateGroupRequest request) {
         return service.createGroup(user(jwt),request);
     }
-    @GetMapping List<ConversationView> list(@AuthenticationPrincipal Jwt jwt,
-                                            @RequestParam(defaultValue="50") int limit) {
-        return service.list(user(jwt),Math.max(1,Math.min(limit,100)));
+    @GetMapping ConversationPage list(@AuthenticationPrincipal Jwt jwt,
+                                      @RequestParam(defaultValue="50") int limit,
+                                      @RequestParam(required=false) String cursor) {
+        return service.list(user(jwt),Math.max(1,Math.min(limit,100)),cursor);
     }
     @GetMapping("/{id}") ConversationView get(@AuthenticationPrincipal Jwt jwt,@PathVariable UUID id) {
         return service.get(user(jwt),id,true);
