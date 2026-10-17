@@ -35,6 +35,27 @@ management:
         enabled: true
 
 im:
+  gateway:
+    enabled: ${IM_GATEWAY_ENABLED:true}
+    port: ${IM_GATEWAY_PORT:18081}
+    public-url: ${IM_GATEWAY_PUBLIC_URL:ws://127.0.0.1:18081/ws}
+    allowed-origins: ${IM_GATEWAY_ALLOWED_ORIGINS:http://localhost:3000,http://127.0.0.1:3000}
+    ticket-ttl: ${IM_GATEWAY_TICKET_TTL:60s}
+    heartbeat-interval: ${IM_GATEWAY_HEARTBEAT_INTERVAL:25s}
+    idle-timeout: ${IM_GATEWAY_IDLE_TIMEOUT:75s}
+    slow-connection-timeout: ${IM_GATEWAY_SLOW_CONNECTION_TIMEOUT:10s}
+    boss-threads: ${IM_GATEWAY_BOSS_THREADS:1}
+    worker-threads: ${IM_GATEWAY_WORKER_THREADS:8}
+    business-threads: ${IM_GATEWAY_BUSINESS_THREADS:8}
+    business-queue-capacity: ${IM_GATEWAY_BUSINESS_QUEUE_CAPACITY:1024}
+    max-frame-bytes: ${IM_GATEWAY_MAX_FRAME_BYTES:65536}
+    write-low-watermark-bytes: ${IM_GATEWAY_WRITE_LOW_WATERMARK_BYTES:32768}
+    write-high-watermark-bytes: ${IM_GATEWAY_WRITE_HIGH_WATERMARK_BYTES:131072}
+    max-pending-outbound-bytes: ${IM_GATEWAY_MAX_PENDING_OUTBOUND_BYTES:262144}
+    max-connection-in-flight: ${IM_GATEWAY_MAX_CONNECTION_IN_FLIGHT:16}
+    max-gateway-in-flight: ${IM_GATEWAY_MAX_IN_FLIGHT:1024}
+    operations-per-second: ${IM_GATEWAY_OPERATIONS_PER_SECOND:30}
+    operation-burst: ${IM_GATEWAY_OPERATION_BURST:60}
   storage:
     root: ${IM_STORAGE_ROOT:./data/attachments}
     max-attachment-bytes: ${IM_MAX_ATTACHMENT_BYTES:26214400}

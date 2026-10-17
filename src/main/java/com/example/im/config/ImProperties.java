@@ -4,6 +4,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 
 import java.time.Duration;
 import java.nio.file.Path;
+import java.util.List;
 
 @ConfigurationProperties(prefix = "im")
 public record ImProperties(
@@ -11,7 +12,8 @@ public record ImProperties(
         Message message,
         RocketMq rocketmq,
         Auth auth,
-        Storage storage
+        Storage storage,
+        Gateway gateway
 ) {
     public record Routing(int slotCount, int tableGroupCount, long hashSeed, String localShardId) {
         public Routing {
@@ -49,6 +51,31 @@ public record ImProperties(
             if (uploadTtl == null || uploadTtl.isNegative() || uploadTtl.isZero()) {
                 throw new IllegalArgumentException("uploadTtl must be positive");
             }
+        }
+    }
+
+    public record Gateway(
+            boolean enabled, int port, String publicUrl, List<String> allowedOrigins,
+            Duration ticketTtl, Duration heartbeatInterval, Duration idleTimeout,
+            Duration slowConnectionTimeout, int bossThreads, int workerThreads,
+            int businessThreads, int businessQueueCapacity, int maxFrameBytes,
+            int writeLowWatermarkBytes, int writeHighWatermarkBytes, int maxPendingOutboundBytes,
+            int maxConnectionInFlight, int maxGatewayInFlight,
+            int operationsPerSecond, int operationBurst
+    ) {
+        public Gateway {
+            allowedOrigins = allowedOrigins == null ? List.of() : List.copyOf(allowedOrigins);
+            if (port < 1 || port > 65535) throw new IllegalArgumentException("gateway port is invalid");
+            if (publicUrl == null || publicUrl.isBlank()) throw new IllegalArgumentException("gateway publicUrl is required");
+            if (ticketTtl == null || ticketTtl.isNegative() || ticketTtl.isZero()) throw new IllegalArgumentException("gateway ticketTtl must be positive");
+            if (heartbeatInterval == null || heartbeatInterval.isNegative() || heartbeatInterval.isZero()) throw new IllegalArgumentException("gateway heartbeatInterval must be positive");
+            if (idleTimeout == null || idleTimeout.compareTo(heartbeatInterval) <= 0) throw new IllegalArgumentException("gateway idleTimeout must exceed heartbeatInterval");
+            if (slowConnectionTimeout == null || slowConnectionTimeout.isNegative() || slowConnectionTimeout.isZero()) throw new IllegalArgumentException("gateway slowConnectionTimeout must be positive");
+            if (bossThreads <= 0 || workerThreads <= 0 || businessThreads <= 0 || businessQueueCapacity <= 0) throw new IllegalArgumentException("gateway thread and queue sizes must be positive");
+            if (maxFrameBytes <= 0 || writeLowWatermarkBytes <= 0 || writeHighWatermarkBytes <= writeLowWatermarkBytes) throw new IllegalArgumentException("gateway frame and watermarks are invalid");
+            if (maxPendingOutboundBytes <= writeHighWatermarkBytes) throw new IllegalArgumentException("gateway maxPendingOutboundBytes must exceed the high watermark");
+            if (maxConnectionInFlight <= 0 || maxGatewayInFlight < maxConnectionInFlight) throw new IllegalArgumentException("gateway in-flight limits are invalid");
+            if (operationsPerSecond <= 0 || operationBurst < operationsPerSecond) throw new IllegalArgumentException("gateway rate limits are invalid");
         }
     }
 

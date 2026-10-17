@@ -20,6 +20,8 @@
 - 历史消息按会话序号双向游标补拉、成员入群边界和高水位对账。
 - 附件初始化、流式上传、SHA-256 校验、消息事务绑定与鉴权下载。
 - 会话目录不透明游标分页。
+- Netty WebSocket 网关、一次性连接票据、Origin 校验、心跳、限流与慢连接保护。
+- WebSocket `SEND` 复用可靠消息事务，并支持同设备连接替换。
 
 ## 本地构建
 
@@ -40,6 +42,9 @@ mvn package
 | `IM_ROCKETMQ_ENDPOINTS` | `127.0.0.1:8081` | RocketMQ Proxy gRPC 地址 |
 | `IM_ROCKETMQ_MESSAGE_TOPIC` | `im-message-events` | 消息事件 Topic |
 | `IM_OUTBOX_MAX_IN_FLIGHT` | `2000` | 单实例异步发布上限，用于背压 |
+| `IM_GATEWAY_PORT` | `18081` | Netty WebSocket 监听端口 |
+| `IM_GATEWAY_PUBLIC_URL` | `ws://127.0.0.1:18081/ws` | 返回给客户端的连接地址 |
+| `IM_GATEWAY_ALLOWED_ORIGINS` | 本地 Vite 地址 | 允许建立连接的浏览器来源 |
 
 ## 初始化数据库
 
@@ -106,11 +111,11 @@ IM_DB_URL='jdbc:mysql://127.0.0.1:3307/im_message?useUnicode=true&characterEncod
 mvn spring-boot:run
 ```
 
-发送接口为 `POST /api/v1/messages`，需要携带登录接口签发的 `Authorization: Bearer <accessToken>`。请求中的 `clientMsgId` 必须是 UUIDv7，服务端会拒绝早于 24 小时或超前超过 5 分钟的值。认证与好友接口见 [第二阶段文档](docs/STAGE2_API.md)，会话与群组接口见 [第三阶段文档](docs/STAGE3_API.md)，历史消息和附件接口见 [第四阶段文档](docs/STAGE4_API.md)。
+发送接口为 `POST /api/v1/messages`，需要携带登录接口签发的 `Authorization: Bearer <accessToken>`。请求中的 `clientMsgId` 必须是 UUIDv7，服务端会拒绝早于 24 小时或超前超过 5 分钟的值。认证与好友接口见 [第二阶段文档](docs/STAGE2_API.md)，会话与群组接口见 [第三阶段文档](docs/STAGE3_API.md)，历史消息和附件接口见 [第四阶段文档](docs/STAGE4_API.md)，实时连接协议见 [第五阶段文档](docs/STAGE5_WEBSOCKET_GATEWAY.md)。
 
 ## 当前边界与下一阶段
 
-当前已完成可靠消息写入、用户认证、好友关系、唯一单聊、群聊与成员权限，以及历史消息、附件和会话目录游标。下一阶段实现 Netty WebSocket 网关；RocketMQ 消费投递、离线同步、已读回执、Web 前端和压测工程随后按技术方案推进。正式部署前还要把本地文件附件适配器替换为私有对象存储，把初始静态路由替换为控制库路由快照，并把目录更新完全切换为消费事件的幂等投影。
+当前已完成可靠消息写入、用户认证、好友关系、会话与成员权限、历史消息、附件，以及 Netty WebSocket 网关。下一阶段实现 Redis 在线租约、RocketMQ 消费投递、跨网关 Dispatch、离线同步和已读回执；Web 前端和压测工程随后按技术方案推进。正式部署前还要把本地文件附件适配器替换为私有对象存储，把初始静态路由替换为控制库路由快照，并把目录更新完全切换为消费事件的幂等投影。
 
 
 

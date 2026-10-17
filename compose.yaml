@@ -21,6 +21,7 @@ services:
       - ./infra/mysql/003_local_access.sql:/docker-entrypoint-initdb.d/003_local_access.sql:ro
       - ./sql/011_stage3_conversation_schema.sql:/docker-entrypoint-initdb.d/004_stage3_conversation_schema.sql:ro
       - ./sql/012_stage4_history_attachment_schema.sql:/docker-entrypoint-initdb.d/005_stage4_history_attachment_schema.sql:ro
+      - ./sql/013_stage5_gateway_schema.sql:/docker-entrypoint-initdb.d/006_stage5_gateway_schema.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p$$MYSQL_ROOT_PASSWORD --silent"]
       interval: 3s
@@ -118,8 +119,12 @@ services:
       IM_ROCKETMQ_ENABLED: "true"
       IM_ROCKETMQ_ENDPOINTS: broker:8081
       IM_STORAGE_ROOT: /app/data/attachments
+      IM_GATEWAY_PORT: 18081
+      IM_GATEWAY_PUBLIC_URL: ws://127.0.0.1:18081/ws
+      IM_GATEWAY_ALLOWED_ORIGINS: http://localhost:3000,http://127.0.0.1:3000
     ports:
       - "18080:8080"
+      - "18081:18081"
     volumes:
       - attachment-data:/app/data/attachments
     depends_on:
