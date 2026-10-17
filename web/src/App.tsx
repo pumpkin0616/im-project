@@ -1,6 +1,6 @@
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
-  ArrowLeft, Ban, Check, CheckCheck, ChevronDown, CircleAlert, ContactRound, Inbox, LoaderCircle,
+  Ban, Check, CheckCheck, ChevronDown, CircleAlert, ContactRound, Inbox, LoaderCircle, Menu,
   Download, FileText, LogOut, MessageCircle, Paperclip, Pencil, Plus, RefreshCw, Search, Send,
   Settings, Shield, ShieldOff, Trash2, Undo2, UserMinus,
   UserPlus, UserRoundCheck, Users, Wifi, WifiOff, X
@@ -545,14 +545,16 @@ function ChatShell({ user, onLoggedOut }: { user: User; onLoggedOut: () => void 
       </>}
     </aside>
 
-    <section className={`chat-panel ${!mobileList ? 'mobile-visible' : ''}`}>
+    {mobileList && <button className="sidebar-backdrop" aria-label="关闭侧栏" onClick={() => setMobileList(false)} />}
+
+    <section className="chat-panel">
       {section === 'contacts' ? <ContactsPanel user={user} view={contactView} friend={selectedFriend}
         incoming={incoming} outgoing={outgoing} blocked={blocked} loading={contactsLoading} onBack={() => setMobileList(true)}
         onChanged={loadContacts} onOpenChat={openFriendChat} onNotice={setNotice}
         onSelectView={setContactView} onFriendRemoved={() => setSelectedFriendId(null)} /> :
-      !selected ? <div className="welcome-empty"><div className="empty-orbit"><MessageCircle size={34} /></div><h2>选择一个会话</h2><p>你的消息会在这里实时出现。</p></div> : <>
+      !selected ? <div className="welcome-empty"><button className="mobile-list-button empty-list-button" onClick={() => setMobileList(true)}><Menu size={17} />会话列表</button><div className="empty-orbit"><MessageCircle size={34} /></div><h2>选择一个会话</h2><p>你的消息会在这里实时出现。</p></div> : <>
         <header className="chat-header">
-          <button className="icon-button mobile-back" onClick={() => setMobileList(true)}><ArrowLeft /></button>
+          <button className="mobile-list-button" onClick={() => setMobileList(true)}><Menu size={17} /><span>会话</span></button>
           <div className={`avatar ${selected.type === 'GROUP' ? 'group' : ''}`}>{selected.type === 'GROUP' ? <Users size={20} /> : initials(conversationName(selected, user.id, detail))}</div>
           <div className="chat-title"><strong>{conversationName(selected, user.id, detail)}</strong><small>{selected.type === 'GROUP' ? `${detail?.memberCount ?? selected.memberCount} 位成员` : connection === 'online' ? '实时连接中' : '消息将可靠送达'}</small></div>
           {selected.type === 'GROUP' && <button className="members-button" disabled={membersLoading} onClick={() => void openGroupMembers()}>{membersLoading ? <LoaderCircle className="spin" size={16} /> : <Users size={16} />}成员</button>}
@@ -655,7 +657,7 @@ function ContactsPanel({ user, view, friend, incoming, outgoing, blocked, loadin
   }
 
   if (view === 'add') return <div className="contacts-panel">
-    <header className="contacts-header"><button className="icon-button mobile-back" onClick={onBack}><ArrowLeft /></button><div><strong>添加好友</strong><small>通过唯一 IM ID 查找用户</small></div></header>
+    <header className="contacts-header"><button className="mobile-list-button" onClick={onBack}><Menu size={17} /><span>联系人</span></button><div><strong>添加好友</strong><small>通过唯一 IM ID 查找用户</small></div></header>
     <div className="contacts-content narrow">
       <div className="contact-hero"><div className="contact-hero-icon"><UserPlus /></div><p className="eyebrow">FIND PEOPLE</p><h2>找到你认识的人</h2><p>输入对方的 IM ID，账号完全一致的结果会排在最前。</p></div>
       <form className="people-search" onSubmit={search}><div className="search-box"><Search size={18} /><input autoFocus minLength={3} maxLength={128} value={query} onChange={event => setQuery(event.target.value)} placeholder="输入 IM ID，例如 xiaoming_01" /></div><button className="primary-button" disabled={searching}>{searching ? <LoaderCircle className="spin" size={18} /> : '搜索'}</button></form>
@@ -671,7 +673,7 @@ function ContactsPanel({ user, view, friend, incoming, outgoing, blocked, loadin
   </div>
 
   if (view === 'requests') return <div className="contacts-panel">
-    <header className="contacts-header"><button className="icon-button mobile-back" onClick={onBack}><ArrowLeft /></button><div><strong>新的朋友</strong><small>{incoming.filter(item => item.status === 0).length} 个申请待处理</small></div><button className="icon-button header-refresh" onClick={() => void onChanged()} title="刷新"><RefreshCw size={17} /></button></header>
+    <header className="contacts-header"><button className="mobile-list-button" onClick={onBack}><Menu size={17} /><span>联系人</span></button><div><strong>新的朋友</strong><small>{incoming.filter(item => item.status === 0).length} 个申请待处理</small></div><button className="icon-button header-refresh" onClick={() => void onChanged()} title="刷新"><RefreshCw size={17} /></button></header>
     <div className="contacts-content request-page">
       <section><div className="content-title"><div><p className="eyebrow">INCOMING</p><h2>收到的申请</h2></div><span>{incoming.filter(item => item.status === 0).length} 待处理</span></div>
         {loading ? <div className="inline-empty"><LoaderCircle className="spin" /></div> : incoming.length ? <div className="request-list">{incoming.map(request => <RequestCard key={request.id} request={request} incoming busy={busyId === request.id}
@@ -686,16 +688,16 @@ function ContactsPanel({ user, view, friend, incoming, outgoing, blocked, loadin
   </div>
 
   if (view === 'blocks') return <div className="contacts-panel">
-    <header className="contacts-header"><button className="icon-button mobile-back" onClick={onBack}><ArrowLeft /></button><div><strong>黑名单</strong><small>黑名单中的用户不能向你发起好友申请</small></div></header>
+    <header className="contacts-header"><button className="mobile-list-button" onClick={onBack}><Menu size={17} /><span>联系人</span></button><div><strong>黑名单</strong><small>黑名单中的用户不能向你发起好友申请</small></div></header>
     <div className="contacts-content narrow"><div className="content-title"><div><p className="eyebrow">BLOCKED USERS</p><h2>已拉黑的用户</h2></div><span>{blocked.length}</span></div>
       {blocked.length ? <div className="request-list">{blocked.map(item => <div className="person-card" key={item.id}><div className="avatar">{initials(item.nickname)}</div><div className="person-copy"><strong>{item.nickname}</strong><small>IM ID：{item.account} · {formatDay(item.blockedAt)}</small></div><button className="small-action" disabled={busyId === item.id} onClick={() => void apply(item.id, () => api.unblockUser(item.id))}>{busyId === item.id ? <LoaderCircle className="spin" size={14} /> : <ShieldOff size={14} />}取消拉黑</button></div>)}</div>
         : <div className="inline-empty"><Ban /><strong>黑名单为空</strong><span>被拉黑的用户会显示在这里。</span></div>}
     </div>
   </div>
 
-  if (!friend) return <div className="contacts-panel"><header className="contacts-header"><button className="icon-button mobile-back" onClick={onBack}><ArrowLeft /></button><div><strong>联系人</strong><small>{user.nickname} · IM ID：{user.account}</small></div></header><div className="welcome-empty"><div className="empty-orbit"><ContactRound size={34} /></div><h2>选择一个联系人</h2><p>可以发消息、删除好友或拉黑对方。</p><button className="soft-button" onClick={() => onSelectView('add')}><UserPlus size={17} />添加好友</button></div></div>
+  if (!friend) return <div className="contacts-panel"><header className="contacts-header"><button className="mobile-list-button" onClick={onBack}><Menu size={17} /><span>联系人</span></button><div><strong>联系人</strong><small>{user.nickname} · IM ID：{user.account}</small></div></header><div className="welcome-empty"><div className="empty-orbit"><ContactRound size={34} /></div><h2>选择一个联系人</h2><p>可以发消息、删除好友或拉黑对方。</p><button className="soft-button" onClick={() => onSelectView('add')}><UserPlus size={17} />添加好友</button></div></div>
 
-  return <div className="contacts-panel"><header className="contacts-header"><button className="icon-button mobile-back" onClick={onBack}><ArrowLeft /></button><div><strong>联系人资料</strong><small>好友关系建立于 {formatDay(friend.friendsSince)}</small></div></header>
+  return <div className="contacts-panel"><header className="contacts-header"><button className="mobile-list-button" onClick={onBack}><Menu size={17} /><span>联系人</span></button><div><strong>联系人资料</strong><small>好友关系建立于 {formatDay(friend.friendsSince)}</small></div></header>
     <div className="profile-card"><div className="avatar profile-avatar">{initials(friend.nickname)}</div><h2>{friend.nickname}</h2><p>IM ID：{friend.account}</p><div className="profile-actions"><button className="primary-button" onClick={() => void onOpenChat(friend.id)}><MessageCircle size={18} />发消息</button><button className="danger-button" disabled={busyId === friend.id} onClick={() => void removeFriend(false)}><Trash2 size={17} />删除好友</button><button className="danger-button strong" disabled={busyId === friend.id} onClick={() => void removeFriend(true)}><Ban size={17} />拉黑</button></div><small className="profile-hint">拉黑会解除好友关系，并阻止双方继续发送好友申请。</small></div>
   </div>
 }
