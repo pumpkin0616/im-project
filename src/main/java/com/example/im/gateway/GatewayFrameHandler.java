@@ -7,6 +7,7 @@ import com.example.im.message.domain.MessageRejectedException;
 import com.example.im.message.domain.MessageType;
 import com.example.im.message.domain.SendMessageCommand;
 import com.example.im.message.domain.SendMessageResult;
+import com.example.im.read.ReadReceiptService;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.netty.channel.ChannelHandlerContext;
@@ -40,6 +41,7 @@ final class GatewayFrameHandler extends SimpleChannelInboundHandler<WebSocketFra
     private final ObjectMapper objectMapper;
     private final SendMessageHandler messages;
     private final GatewayConnectionRegistry connections;
+    private final ReadReceiptService reads;
     private final ImProperties.Gateway config;
     private final Executor businessExecutor;
     private final Semaphore gatewayInFlight;
@@ -52,11 +54,12 @@ final class GatewayFrameHandler extends SimpleChannelInboundHandler<WebSocketFra
     private ScheduledFuture<?> slowClose;
 
     GatewayFrameHandler(ObjectMapper objectMapper, SendMessageHandler messages,
-                        GatewayConnectionRegistry connections, ImProperties.Gateway config,
+                        GatewayConnectionRegistry connections, ReadReceiptService reads, ImProperties.Gateway config,
                         Executor businessExecutor, Semaphore gatewayInFlight, MeterRegistry meters) {
         this.objectMapper = objectMapper;
         this.messages = messages;
         this.connections = connections;
+        this.reads = reads;
         this.config = config;
         this.businessExecutor = businessExecutor;
         this.gatewayInFlight = gatewayInFlight;
@@ -119,6 +122,8 @@ final class GatewayFrameHandler extends SimpleChannelInboundHandler<WebSocketFra
                 write(context, "PONG", requestId, Map.of("serverTime", java.time.Instant.now().toString()));
             } else if (operation.equals("SEND")) {
                 submitSend(context, requestId, envelope.path("data"));
+            } else if (operation.equals("READ")) {
+                submitRead(context, requestId, envelope.path("data"));
             } else if (operation.equals("RECEIVED_ACK")) {
                 write(context, "RECEIVED_ACK", requestId, Map.of("accepted", true));
             } else {
@@ -129,6 +134,58 @@ final class GatewayFrameHandler extends SimpleChannelInboundHandler<WebSocketFra
             error(context, requestId, code, exception.getMessage(), false, null);
         } catch (JacksonException exception) {
             error(context, requestId, "INVALID_JSON", "Frame must contain valid JSON", false, null);
+        }
+    }
+
+    private void submitRead(ChannelHandlerContext context, String requestId, JsonNode data) {
+        if (data.isMissingNode() || !data.isObject()) throw new ProtocolException("INVALID_FRAME", "READ data is required");
+        UUID conversationId = UUID.fromString(requiredText(data, "conversationId"));
+        JsonNode sequenceNode = data.path("seq");
+        long sequence;
+        try {
+            sequence = sequenceNode.isTextual() ? Long.parseUnsignedLong(sequenceNode.asString()) : sequenceNode.asLong(-1);
+        } catch (NumberFormatException exception) {
+            throw new ProtocolException("INVALID_FRAME", "seq is invalid");
+        }
+        if (sequence < 0) throw new ProtocolException("INVALID_FRAME", "seq must not be negative");
+        if (connectionInFlight >= config.maxConnectionInFlight() || !gatewayInFlight.tryAcquire()) {
+            busy.increment();
+            error(context, requestId, "GATEWAY_BUSY", "Gateway request capacity is exhausted", true, 50L);
+            return;
+        }
+        connectionInFlight++;
+        UUID userId = context.channel().attr(GatewayAttributes.IDENTITY).get().userId();
+        try {
+            businessExecutor.execute(() -> {
+                ReadReceiptService.ReadUpdate result = null; Throwable failure = null;
+                try { result = reads.advance(userId, conversationId, sequence); }
+                catch (Throwable exception) { failure = exception; }
+                ReadReceiptService.ReadUpdate completed = result; Throwable thrown = failure;
+                context.executor().execute(() -> completeRead(context, requestId, completed, thrown));
+            });
+        } catch (RejectedExecutionException exception) {
+            connectionInFlight--;
+            gatewayInFlight.release();
+            busy.increment();
+            error(context, requestId, "GATEWAY_BUSY", "Gateway business queue is full", true, 50L);
+        }
+    }
+
+    private void completeRead(ChannelHandlerContext context, String requestId,
+                              ReadReceiptService.ReadUpdate result, Throwable failure) {
+        connectionInFlight--;
+        gatewayInFlight.release();
+        if (!context.channel().isActive()) return;
+        if (failure == null) {
+            write(context, "READ_UPDATE", requestId, Map.of(
+                    "conversationId", result.conversationId().toString(),
+                    "userId", result.userId().toString(),
+                    "readSeq", Long.toUnsignedString(result.readSeq()),
+                    "highWatermark", Long.toUnsignedString(result.highWatermark())));
+        } else if (failure instanceof ApiBusinessException business) {
+            error(context, requestId, business.code(), business.getMessage(), business.retryable(), null);
+        } else {
+            error(context, requestId, "INTERNAL_ERROR", "Gateway operation failed", true, 1000L);
         }
     }
 

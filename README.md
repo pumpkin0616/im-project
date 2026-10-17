@@ -22,6 +22,9 @@
 - 会话目录不透明游标分页。
 - Netty WebSocket 网关、一次性连接票据、Origin 校验、心跳、限流与慢连接保护。
 - WebSocket `SEND` 复用可靠消息事务，并支持同设备连接替换。
+- Redis 在线连接租约、条件续租/删除和按用户批量路由查询。
+- RocketMQ `MESSAGE_CREATED` 消费、在线 `MESSAGE` 推送和跨网关批量 Dispatch。
+- 批量离线同步、WebSocket/HTTP 已读游标更新和单聊已读回执。
 
 ## 本地构建
 
@@ -35,8 +38,8 @@ mvn package
 | 变量 | 默认值 | 说明 |
 |---|---:|---|
 | `IM_DB_URL` | `jdbc:mysql://127.0.0.1:3307/im_message...` | 当前消息分片地址 |
-| `IM_DB_USERNAME` | `im` | 数据库用户 |
-| `IM_DB_PASSWORD` | `im` | 数据库密码 |
+| `IM_DB_USERNAME` | `im_app` | 数据库用户 |
+| `IM_DB_PASSWORD` | `im_app` | 数据库密码 |
 | `IM_LOCAL_SHARD_ID` | `shard-0` | 本实例负责的物理分片 |
 | `IM_ROCKETMQ_ENABLED` | `false` | 是否启动 Outbox 发布器 |
 | `IM_ROCKETMQ_ENDPOINTS` | `127.0.0.1:8081` | RocketMQ Proxy gRPC 地址 |
@@ -45,6 +48,10 @@ mvn package
 | `IM_GATEWAY_PORT` | `18081` | Netty WebSocket 监听端口 |
 | `IM_GATEWAY_PUBLIC_URL` | `ws://127.0.0.1:18081/ws` | 返回给客户端的连接地址 |
 | `IM_GATEWAY_ALLOWED_ORIGINS` | 本地 Vite 地址 | 允许建立连接的浏览器来源 |
+| `IM_REDIS_HOST` / `IM_REDIS_PORT` | `127.0.0.1:6380` | 在线路由 Redis |
+| `IM_GATEWAY_ID` | `gateway-local-1` | 网关实例唯一标识 |
+| `IM_GATEWAY_DISPATCH_URL` | 本机内部地址 | 其他网关访问当前实例的地址 |
+| `IM_ROCKETMQ_CONSUMER_GROUP` | `im-realtime-delivery-v1` | 实时投递消费组 |
 
 ## 初始化数据库
 
@@ -111,11 +118,11 @@ IM_DB_URL='jdbc:mysql://127.0.0.1:3307/im_message?useUnicode=true&characterEncod
 mvn spring-boot:run
 ```
 
-发送接口为 `POST /api/v1/messages`，需要携带登录接口签发的 `Authorization: Bearer <accessToken>`。请求中的 `clientMsgId` 必须是 UUIDv7，服务端会拒绝早于 24 小时或超前超过 5 分钟的值。认证与好友接口见 [第二阶段文档](docs/STAGE2_API.md)，会话与群组接口见 [第三阶段文档](docs/STAGE3_API.md)，历史消息和附件接口见 [第四阶段文档](docs/STAGE4_API.md)，实时连接协议见 [第五阶段文档](docs/STAGE5_WEBSOCKET_GATEWAY.md)。
+发送接口为 `POST /api/v1/messages`，需要携带登录接口签发的 `Authorization: Bearer <accessToken>`。请求中的 `clientMsgId` 必须是 UUIDv7，服务端会拒绝早于 24 小时或超前超过 5 分钟的值。认证与好友接口见 [第二阶段文档](docs/STAGE2_API.md)，会话与群组接口见 [第三阶段文档](docs/STAGE3_API.md)，历史消息和附件接口见 [第四阶段文档](docs/STAGE4_API.md)，实时连接协议见 [第五阶段文档](docs/STAGE5_WEBSOCKET_GATEWAY.md)，实时投递与同步见 [第六阶段文档](docs/STAGE6_REALTIME_DELIVERY.md)。
 
 ## 当前边界与下一阶段
 
-当前已完成可靠消息写入、用户认证、好友关系、会话与成员权限、历史消息、附件，以及 Netty WebSocket 网关。下一阶段实现 Redis 在线租约、RocketMQ 消费投递、跨网关 Dispatch、离线同步和已读回执；Web 前端和压测工程随后按技术方案推进。正式部署前还要把本地文件附件适配器替换为私有对象存储，把初始静态路由替换为控制库路由快照，并把目录更新完全切换为消费事件的幂等投影。
+当前已完成可靠消息写入、用户认证、好友关系、会话与成员权限、历史消息、附件、Netty WebSocket 网关、Redis 在线租约、RocketMQ 实时投递、跨网关 Dispatch、离线同步和已读回执。下一阶段实现 Web 客户端和端到端状态机；随后完成目录事件投影、路由迁移自动化与 3,000/9,000 条每秒压测。正式部署前还要把本地文件附件适配器替换为私有对象存储，并把初始静态路由替换为控制库路由快照。
 
 
 

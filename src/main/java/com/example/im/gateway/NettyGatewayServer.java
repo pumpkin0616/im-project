@@ -2,6 +2,7 @@ package com.example.im.gateway;
 
 import com.example.im.config.ImProperties;
 import com.example.im.message.application.SendMessageHandler;
+import com.example.im.read.ReadReceiptService;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.channel.Channel;
@@ -34,6 +35,7 @@ public final class NettyGatewayServer implements SmartLifecycle {
     private final GatewayTicketService tickets;
     private final GatewayConnectionRegistry connections;
     private final SendMessageHandler messages;
+    private final ReadReceiptService reads;
     private final ObjectMapper objectMapper;
     private final MeterRegistry meters;
     private volatile boolean running;
@@ -44,11 +46,12 @@ public final class NettyGatewayServer implements SmartLifecycle {
 
     public NettyGatewayServer(ImProperties properties, GatewayTicketService tickets,
                               GatewayConnectionRegistry connections, SendMessageHandler messages,
-                              ObjectMapper objectMapper, MeterRegistry meters) {
+                              ReadReceiptService reads, ObjectMapper objectMapper, MeterRegistry meters) {
         this.config = properties.gateway();
         this.tickets = tickets;
         this.connections = connections;
         this.messages = messages;
+        this.reads = reads;
         this.objectMapper = objectMapper;
         this.meters = meters;
     }
@@ -84,7 +87,7 @@ public final class NettyGatewayServer implements SmartLifecycle {
                             channel.pipeline().addLast("idle", new IdleStateHandler(config.idleTimeout().toMillis(), 0, 0, TimeUnit.MILLISECONDS));
                             channel.pipeline().addLast("websocket", new WebSocketServerProtocolHandler(webSocket));
                             channel.pipeline().addLast("protocol", new GatewayFrameHandler(objectMapper, messages,
-                                    connections, config, business, gatewayInFlight, meters));
+                                    connections, reads, config, business, gatewayInFlight, meters));
                         }
                     }).bind(config.port()).syncUninterruptibly().channel();
             running = true;

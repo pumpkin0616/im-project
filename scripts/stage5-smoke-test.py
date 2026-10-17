@@ -36,7 +36,8 @@ class WebSocket:
         self.sock.sendall(request)
         response=b""
         while b"\r\n\r\n" not in response: response+=self.sock.recv(4096)
-        self.status=int(response.split(b" ",2)[1])
+        headers,self.buffer=response.split(b"\r\n\r\n",1)
+        self.status=int(headers.split(b" ",2)[1])
         if self.status!=101: self.sock.close()
 
     def send_json(self,value): self.send_frame(1,json.dumps(value,separators=(",",":")).encode())
@@ -67,7 +68,7 @@ class WebSocket:
         try: self.send_frame(8,struct.pack("!H",1000)); self.sock.close()
         except OSError: pass
     def _read(self,count):
-        value=b""
+        value=self.buffer[:count]; self.buffer=self.buffer[count:]
         while len(value)<count:
             part=self.sock.recv(count-len(value))
             if not part: raise ConnectionError("WebSocket closed")

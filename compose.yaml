@@ -1,6 +1,20 @@
 name: im-local
 
 services:
+  redis:
+    image: redis:7.4-alpine
+    command: ["redis-server", "--appendonly", "yes", "--appendfsync", "everysec", "--maxmemory-policy", "noeviction"]
+    ports:
+      - "6380:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+    restart: unless-stopped
+
   mysql:
     image: mysql:8.4
     environment:
@@ -118,6 +132,11 @@ services:
       IM_LOCAL_SHARD_ID: shard-0
       IM_ROCKETMQ_ENABLED: "true"
       IM_ROCKETMQ_ENDPOINTS: broker:8081
+      IM_REDIS_HOST: redis
+      IM_REDIS_PORT: 6379
+      IM_GATEWAY_ID: gateway-local-1
+      IM_GATEWAY_DISPATCH_URL: http://app:8080/internal/v1/gateway/dispatch
+      IM_GATEWAY_DISPATCH_SECRET: local-dispatch-secret-change-me
       IM_STORAGE_ROOT: /app/data/attachments
       IM_GATEWAY_PORT: 18081
       IM_GATEWAY_PUBLIC_URL: ws://127.0.0.1:18081/ws
@@ -129,6 +148,8 @@ services:
       - attachment-data:/app/data/attachments
     depends_on:
       mysql:
+        condition: service_healthy
+      redis:
         condition: service_healthy
       broker:
         condition: service_healthy
@@ -143,6 +164,7 @@ services:
     restart: unless-stopped
 
 volumes:
+  redis-data:
   mysql-data:
   rocketmq-store:
   attachment-data:

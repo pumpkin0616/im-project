@@ -38,7 +38,7 @@ final class MessageQueryService {
         this.localShard = properties.routing().localShardId();
     }
 
-    MessagePage list(UUID userId, UUID conversationId, Long beforeSeq, Long afterSeq, int limit) {
+    public MessagePage list(UUID userId, UUID conversationId, Long beforeSeq, Long afterSeq, int limit) {
         if (beforeSeq != null && afterSeq != null) {
             throw error("INVALID_CURSOR", "beforeSeq and afterSeq cannot be used together", 400);
         }

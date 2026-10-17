@@ -13,7 +13,8 @@ public record ImProperties(
         RocketMq rocketmq,
         Auth auth,
         Storage storage,
-        Gateway gateway
+        Gateway gateway,
+        Online online
 ) {
     public record Routing(int slotCount, int tableGroupCount, long hashSeed, String localShardId) {
         public Routing {
@@ -79,18 +80,39 @@ public record ImProperties(
         }
     }
 
+    public record Online(
+            boolean enabled, String gatewayId, String dispatchUrl, String dispatchSecret,
+            Duration leaseTtl, Duration renewInterval, int routeThreads, int routeQueueCapacity
+    ) {
+        public Online {
+            if (gatewayId == null || gatewayId.isBlank()) throw new IllegalArgumentException("online gatewayId is required");
+            if (dispatchUrl == null || dispatchUrl.isBlank()) throw new IllegalArgumentException("online dispatchUrl is required");
+            if (dispatchSecret == null || dispatchSecret.getBytes(java.nio.charset.StandardCharsets.UTF_8).length < 16) {
+                throw new IllegalArgumentException("online dispatchSecret must contain at least 16 bytes");
+            }
+            if (leaseTtl == null || leaseTtl.isNegative() || leaseTtl.isZero()) throw new IllegalArgumentException("online leaseTtl must be positive");
+            if (renewInterval == null || renewInterval.isNegative() || renewInterval.isZero()
+                    || renewInterval.compareTo(leaseTtl) >= 0) throw new IllegalArgumentException("online renewInterval must be shorter than leaseTtl");
+            if (routeThreads <= 0 || routeQueueCapacity <= 0) throw new IllegalArgumentException("online route executor limits must be positive");
+        }
+    }
+
     public record RocketMq(
             boolean enabled,
             String endpoints,
             String messageTopic,
             String membershipTopic,
             String producerIdentity,
+            String consumerGroup,
+            int consumerThreads,
             int outboxBatchSize,
             int outboxMaxInFlight,
             Duration outboxLease,
             int outboxMaxAttempts
     ) {
         public RocketMq {
+            if (consumerGroup == null || consumerGroup.isBlank()) throw new IllegalArgumentException("consumerGroup is required");
+            if (consumerThreads <= 0) throw new IllegalArgumentException("consumerThreads must be positive");
             if (outboxBatchSize <= 0 || outboxBatchSize > 1000) {
                 throw new IllegalArgumentException("outboxBatchSize must be between 1 and 1000");
             }

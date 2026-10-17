@@ -14,6 +14,12 @@ spring:
     enabled: ${IM_FLYWAY_ENABLED:false}
   jackson:
     default-property-inclusion: non_null
+  data:
+    redis:
+      host: ${IM_REDIS_HOST:127.0.0.1}
+      port: ${IM_REDIS_PORT:6380}
+      connect-timeout: 1s
+      timeout: 1s
 
 server:
   port: ${IM_HTTP_PORT:8080}
@@ -33,8 +39,20 @@ management:
     health:
       probes:
         enabled: true
+  health:
+    redis:
+      enabled: false
 
 im:
+  online:
+    enabled: ${IM_ONLINE_ENABLED:true}
+    gateway-id: ${IM_GATEWAY_ID:gateway-local-1}
+    dispatch-url: ${IM_GATEWAY_DISPATCH_URL:http://127.0.0.1:8080/internal/v1/gateway/dispatch}
+    dispatch-secret: ${IM_GATEWAY_DISPATCH_SECRET:local-dispatch-secret-change-me}
+    lease-ttl: ${IM_ONLINE_LEASE_TTL:90s}
+    renew-interval: ${IM_ONLINE_RENEW_INTERVAL:30s}
+    route-threads: ${IM_ONLINE_ROUTE_THREADS:4}
+    route-queue-capacity: ${IM_ONLINE_ROUTE_QUEUE_CAPACITY:4096}
   gateway:
     enabled: ${IM_GATEWAY_ENABLED:true}
     port: ${IM_GATEWAY_PORT:18081}
@@ -79,6 +97,8 @@ im:
     message-topic: ${IM_ROCKETMQ_MESSAGE_TOPIC:im-message-events}
     membership-topic: ${IM_ROCKETMQ_MEMBERSHIP_TOPIC:im-membership-events}
     producer-identity: ${IM_ROCKETMQ_PRODUCER_IDENTITY:im-outbox-publisher}
+    consumer-group: ${IM_ROCKETMQ_CONSUMER_GROUP:im-realtime-delivery-v1}
+    consumer-threads: ${IM_ROCKETMQ_CONSUMER_THREADS:32}
     outbox-batch-size: ${IM_OUTBOX_BATCH_SIZE:200}
     outbox-max-in-flight: ${IM_OUTBOX_MAX_IN_FLIGHT:2000}
     outbox-lease: ${IM_OUTBOX_LEASE:30s}
