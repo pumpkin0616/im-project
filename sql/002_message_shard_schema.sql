@@ -18,6 +18,13 @@ CREATE TABLE slot_fences (
     CONSTRAINT ck_slot_fences_slot CHECK (slot_id < 1024)
 ) ENGINE=InnoDB;
 
+CREATE TABLE conversation_fences (
+    conversation_id BINARY(16) NOT NULL,
+    route_epoch     BIGINT UNSIGNED NOT NULL,
+    writable        BOOLEAN NOT NULL DEFAULT TRUE,
+    PRIMARY KEY (conversation_id)
+) ENGINE=InnoDB;
+
 CREATE TABLE dedup_generations (
     generation      BIGINT UNSIGNED NOT NULL,
     state           TINYINT UNSIGNED NOT NULL COMMENT '1 open, 2 closed',

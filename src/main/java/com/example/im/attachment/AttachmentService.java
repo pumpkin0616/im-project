@@ -10,6 +10,7 @@ import com.example.im.routing.ConversationRouteResolver;
 import com.example.im.routing.MessageTableNames;
 import com.example.im.routing.ResolvedRoute;
 import com.example.im.routing.UuidCodec;
+import com.example.im.routing.RouteWriteGuard;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -38,10 +39,11 @@ final class AttachmentService {
     private final Path root;
     private final long maximumBytes;
     private final java.time.Duration uploadTtl;
+    private final RouteWriteGuard routeWriteGuard;
 
     AttachmentService(JdbcTemplate jdbc, TransactionTemplate transactions,
                       ConversationRouteResolver routes, UuidV7Generator ids,
-                      ImProperties properties) {
+                      ImProperties properties, RouteWriteGuard routeWriteGuard) {
         this.jdbc = jdbc;
         this.transactions = transactions;
         this.routes = routes;
@@ -50,6 +52,7 @@ final class AttachmentService {
         this.root = properties.storage().root().toAbsolutePath().normalize();
         this.maximumBytes = properties.storage().maxAttachmentBytes();
         this.uploadTtl = properties.storage().uploadTtl();
+        this.routeWriteGuard = routeWriteGuard;
     }
 
     UploadTicket create(UUID userId, UUID conversationId, CreateAttachmentRequest request) {
@@ -57,27 +60,33 @@ final class AttachmentService {
             throw error("ATTACHMENT_TOO_LARGE", "Attachment exceeds the configured size limit", 413);
         }
         Table table = table(conversationId);
-        requireActiveMember(table, conversationId, userId);
-        UUID id = ids.next();
-        Instant now = Instant.now();
-        Instant expires = now.plus(uploadTtl);
-        String objectKey = table.route().slotId() + "/" + conversationId + "/" + id;
-        byte[] expectedHash = request.sha256() == null ? null : HexFormat.of().parseHex(request.sha256());
-        jdbc.update("INSERT INTO " + table.attachments() + "(id,conversation_id,slot_id,owner_id,"
-                        + "object_key,file_name,mime_type,size_bytes,sha256,status,expires_at,created_at) "
-                        + "VALUES(?,?,?,?,?,?,?,?,?,0,?,?)",
-                bytes(id), bytes(conversationId), table.route().slotId(), bytes(userId), objectKey,
-                request.fileName(), request.mimeType(), request.sizeBytes(), expectedHash,
-                Timestamp.from(expires), Timestamp.from(now));
-        String base = "/api/v1/conversations/" + conversationId + "/attachments/" + id;
-        return new UploadTicket(id, conversationId, "UPLOADING", base + "/content",
-                base + "/complete", expires);
+        UploadTicket ticket = transactions.execute(status -> {
+            routeWriteGuard.lock(jdbc, table.route(), conversationId);
+            requireActiveMember(table, conversationId, userId);
+            UUID id = ids.next();
+            Instant now = Instant.now();
+            Instant expires = now.plus(uploadTtl);
+            String objectKey = table.route().slotId() + "/" + conversationId + "/" + id;
+            byte[] expectedHash = request.sha256() == null ? null : HexFormat.of().parseHex(request.sha256());
+            jdbc.update("INSERT INTO " + table.attachments() + "(id,conversation_id,slot_id,owner_id,"
+                            + "object_key,file_name,mime_type,size_bytes,sha256,status,expires_at,created_at) "
+                            + "VALUES(?,?,?,?,?,?,?,?,?,0,?,?)",
+                    bytes(id), bytes(conversationId), table.route().slotId(), bytes(userId), objectKey,
+                    request.fileName(), request.mimeType(), request.sizeBytes(), expectedHash,
+                    Timestamp.from(expires), Timestamp.from(now));
+            String base = "/api/v1/conversations/" + conversationId + "/attachments/" + id;
+            return new UploadTicket(id, conversationId, "UPLOADING", base + "/content",
+                    base + "/complete", expires);
+        });
+        if (ticket == null) throw new IllegalStateException("Attachment transaction returned no result");
+        return ticket;
     }
 
     void upload(UUID userId, UUID conversationId, UUID attachmentId,
                 long contentLength, InputStream input) throws IOException {
         Table table = table(conversationId);
         Attachment attachment = transactions.execute(status -> {
+            routeWriteGuard.lock(jdbc, table.route(), conversationId);
             Attachment value = attachmentForUpdate(table, conversationId, attachmentId);
             requireOwner(value, userId);
             if (value.status() != 0) throw error("UPLOAD_ALREADY_STARTED", "Attachment upload is not pending", 409);
@@ -135,6 +144,7 @@ final class AttachmentService {
             throw error("ATTACHMENT_REJECTED", "Attachment integrity verification failed", 422);
         }
         return transactions.execute(status -> {
+            routeWriteGuard.lock(jdbc, table.route(), conversationId);
             Attachment value = attachmentForUpdate(table, conversationId, attachmentId);
             requireOwner(value, userId);
             if (value.status() == 2) return view(value, conversationId);

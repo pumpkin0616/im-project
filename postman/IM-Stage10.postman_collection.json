@@ -1,0 +1,100 @@
+{
+  "info": {
+    "_postman_id": "01a14ae0-91cb-7af8-9c18-4b838b5437af",
+    "name": "IM Stage 10 - Routing Migration",
+    "description": "Control-plane route inspection, cache invalidation, hot-conversation migration and migration result verification.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "routingApi", "value": "http://127.0.0.1:18080" }
+  ],
+  "auth": {
+    "type": "apikey",
+    "apikey": [
+      { "key": "key", "value": "X-IM-Routing-Secret", "type": "string" },
+      { "key": "value", "value": "{{routingSecret}}", "type": "string" },
+      { "key": "in", "value": "header", "type": "string" }
+    ]
+  },
+  "item": [
+    {
+      "name": "Inspect conversation route",
+      "request": {
+        "method": "GET",
+        "url": "{{routingApi}}/internal/v1/routing/routes/{{conversationId}}"
+      },
+      "event": [{
+        "listen": "test",
+        "script": { "type": "text/javascript", "exec": [
+          "pm.test('route is active', () => pm.response.to.have.status(200));",
+          "const route = pm.response.json();",
+          "pm.test('route contract is complete', () => { pm.expect(route.slotId).to.be.within(0, 1023); pm.expect(route.state).to.eql('ACTIVE'); pm.expect(route.routeEpoch).to.be.above(0); });"
+        ]}
+      }]
+    },
+    {
+      "name": "Inspect route cache",
+      "request": {
+        "method": "GET",
+        "url": "{{routingApi}}/internal/v1/routing/cache"
+      },
+      "event": [{
+        "listen": "test",
+        "script": { "type": "text/javascript", "exec": [
+          "pm.test('cache status succeeds', () => pm.response.to.have.status(200));",
+          "pm.test('revision is available', () => pm.expect(pm.response.json().observedRouteVersion).to.be.above(0));"
+        ]}
+      }]
+    },
+    {
+      "name": "Invalidate local route cache",
+      "request": {
+        "method": "POST",
+        "url": "{{routingApi}}/internal/v1/routing/cache/invalidate"
+      },
+      "event": [{
+        "listen": "test",
+        "script": { "type": "text/javascript", "exec": [
+          "pm.test('cache invalidation succeeds', () => pm.response.to.have.status(200));",
+          "pm.test('cache is empty', () => pm.expect(pm.response.json().entries).to.eql(0));"
+        ]}
+      }]
+    },
+    {
+      "name": "Migrate one hot conversation",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": "{{routingApi}}/internal/v1/routing/migrations",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"scopeType\": \"CONVERSATION\",\n  \"conversationId\": \"{{conversationId}}\",\n  \"targetShard\": \"{{targetShard}}\",\n  \"targetTableGroup\": {{targetTableGroup}}\n}"
+        },
+        "description": "Choose a target table group different from the current route. The request returns after copy, freeze, catch-up, switch and verification complete."
+      },
+      "event": [{
+        "listen": "test",
+        "script": { "type": "text/javascript", "exec": [
+          "pm.test('migration completed', () => pm.response.to.have.status(201));",
+          "const job = pm.response.json();",
+          "pm.test('migration is verified', () => { pm.expect(job.state).to.eql('COMPLETED'); pm.expect(job.targetEpoch).to.eql(job.sourceEpoch + 1); pm.expect(job.checkpoint).to.have.property('verifiedAt'); });",
+          "pm.environment.set('migrationId', job.id);"
+        ]}
+      }]
+    },
+    {
+      "name": "Read migration result",
+      "request": {
+        "method": "GET",
+        "url": "{{routingApi}}/internal/v1/routing/migrations/{{migrationId}}"
+      },
+      "event": [{
+        "listen": "test",
+        "script": { "type": "text/javascript", "exec": [
+          "pm.test('migration can be audited', () => pm.response.to.have.status(200));",
+          "pm.test('terminal state is retained', () => pm.expect(pm.response.json().state).to.be.oneOf(['COMPLETED', 'FAILED']));"
+        ]}
+      }]
+    }
+  ]
+}

@@ -30,6 +30,9 @@
 - 两分钟内撤回自己的文本、图片和文件消息，撤回事件通过 Outbox 和 RocketMQ 顺序投递。
 - 会话摘要、未读数、单聊对象信息、50 条游标分页及实时目录刷新。
 - 头像上传、好友申请取消、黑名单查询/解除和完整群管理页面。
+- 1,024 槽控制面动态路由、版本感知缓存和会话级热点路由。
+- 槽位/单会话在线迁移、epoch 写栅栏、迁移校验与源数据封存。
+- Flyway V10、路由健康检查、Prometheus 指标和受密钥保护的运维接口。
 
 ## 本地构建
 
@@ -42,7 +45,7 @@ mvn package
 
 | 变量 | 默认值 | 说明 |
 |---|---:|---|
-| `IM_DB_URL` | `jdbc:mysql://127.0.0.1:3307/im_message...` | 当前消息分片地址 |
+| `IM_DB_URL` | `jdbc:mysql://127.0.0.1:3307/im_message...` | 当前消息分片地址；迁移连接应启用游标读取 |
 | `IM_DB_USERNAME` | `im_app` | 数据库用户 |
 | `IM_DB_PASSWORD` | `im_app` | 数据库密码 |
 | `IM_LOCAL_SHARD_ID` | `shard-0` | 本实例负责的物理分片 |
@@ -57,6 +60,12 @@ mvn package
 | `IM_GATEWAY_ID` | `gateway-local-1` | 网关实例唯一标识 |
 | `IM_GATEWAY_DISPATCH_URL` | 本机内部地址 | 其他网关访问当前实例的地址 |
 | `IM_ROCKETMQ_CONSUMER_GROUP` | `im-realtime-delivery-v1` | 实时投递消费组 |
+| `IM_ROUTING_MODE` | `control-plane` | 使用控制面动态路由 |
+| `IM_ROUTING_CACHE_TTL` | `30s` | 本地路由缓存有效期 |
+| `IM_ROUTING_REVISION_POLL_INTERVAL` | `1s` | 路由版本刷新间隔 |
+| `IM_ROUTING_ADMIN_SECRET` | 本地开发值 | 路由管理接口密钥，生产必须替换 |
+| `IM_FLYWAY_ENABLED` | `false` | 发布期间启用 Flyway；需同时提供独立 DDL 账号 |
+| `SPRING_FLYWAY_USER` / `SPRING_FLYWAY_PASSWORD` | 无 | Flyway DDL 账号，不能复用 `im_app` |
 
 ## 初始化数据库
 
@@ -123,11 +132,11 @@ IM_DB_URL='jdbc:mysql://127.0.0.1:3307/im_message?useUnicode=true&characterEncod
 mvn spring-boot:run
 ```
 
-发送接口为 `POST /api/v1/messages`，需要携带登录接口签发的 `Authorization: Bearer <accessToken>`。请求中的 `clientMsgId` 必须是 UUIDv7，服务端会拒绝早于 24 小时或超前超过 5 分钟的值。认证与好友接口见 [第二阶段文档](docs/STAGE2_API.md)，会话与群组接口见 [第三阶段文档](docs/STAGE3_API.md)，历史消息和附件接口见 [第四阶段文档](docs/STAGE4_API.md)，实时连接协议见 [第五阶段文档](docs/STAGE5_WEBSOCKET_GATEWAY.md)，实时投递与同步见 [第六阶段文档](docs/STAGE6_REALTIME_DELIVERY.md)，联系人页面见 [第八阶段文档](docs/STAGE8_CONTACTS.md)。
+发送接口为 `POST /api/v1/messages`，需要携带登录接口签发的 `Authorization: Bearer <accessToken>`。请求中的 `clientMsgId` 必须是 UUIDv7，服务端会拒绝早于 24 小时或超前超过 5 分钟的值。认证与好友接口见 [第二阶段文档](docs/STAGE2_API.md)，会话与群组接口见 [第三阶段文档](docs/STAGE3_API.md)，历史消息和附件接口见 [第四阶段文档](docs/STAGE4_API.md)，实时连接协议见 [第五阶段文档](docs/STAGE5_WEBSOCKET_GATEWAY.md)，实时投递与同步见 [第六阶段文档](docs/STAGE6_REALTIME_DELIVERY.md)，联系人页面见 [第八阶段文档](docs/STAGE8_CONTACTS.md)，动态路由和在线迁移见 [第十阶段文档](docs/STAGE10_ROUTING_MIGRATION.md)。
 
 ## 当前边界与下一阶段
 
-当前已完成可靠消息写入、用户认证、好友关系、会话与成员权限、历史消息、附件、消息撤回、Netty WebSocket 网关、Redis 在线租约、RocketMQ 实时投递、跨网关 Dispatch、离线同步、已读回执、实时目录通知及完整 React Web 客户端。Web 使用与启动方式见 [第七阶段文档](docs/STAGE7_WEB_CLIENT.md)，联系人功能见 [第八阶段文档](docs/STAGE8_CONTACTS.md)，产品闭环与撤回见 [第九阶段文档](docs/STAGE9_PRODUCT_COMPLETION.md)。下一阶段聚焦路由迁移自动化与 3,000/9,000 条每秒压测。
+当前已完成可靠消息写入、用户认证、好友关系、会话与成员权限、历史消息、附件、消息撤回、Netty WebSocket 网关、Redis 在线租约、RocketMQ 实时投递、跨网关 Dispatch、离线同步、已读回执、实时目录通知、完整 React Web 客户端，以及第十阶段的动态路由和在线迁移。Web 使用与启动方式见 [第七阶段文档](docs/STAGE7_WEB_CLIENT.md)，联系人功能见 [第八阶段文档](docs/STAGE8_CONTACTS.md)，产品闭环与撤回见 [第九阶段文档](docs/STAGE9_PRODUCT_COMPLETION.md)。下一阶段是历史归档与数据生命周期管理。
 
 
 

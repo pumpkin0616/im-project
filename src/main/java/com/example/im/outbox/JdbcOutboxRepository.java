@@ -30,12 +30,18 @@ class JdbcOutboxRepository {
 
     List<OutboxEvent> claim(int tableGroup, int limit, UUID leaseOwner, Duration lease) {
         String table = tableName(tableGroup);
+        String conversations = String.format("conversations_%02d", tableGroup);
         return transactions.execute(status -> {
-            String select = "SELECT id, event_id, event_type, schema_version, slot_id, "
-                    + "conversation_id, message_day, message_seq, payload, attempts FROM " + table
-                    + " WHERE ((status = 0 AND available_at <= UTC_TIMESTAMP(3)) "
-                    + "OR (status = 1 AND lease_until < UTC_TIMESTAMP(3))) "
-                    + "ORDER BY id LIMIT ? FOR UPDATE SKIP LOCKED";
+            String select = "SELECT o.id,o.event_id,o.event_type,o.schema_version,o.slot_id,"
+                    + "o.conversation_id,o.message_day,o.message_seq,o.payload,o.attempts FROM " + table + " o "
+                    + "JOIN " + conversations + " c ON c.id=o.conversation_id "
+                    + "WHERE c.write_state<>3 "
+                    + "AND NOT EXISTS (SELECT 1 FROM im_control.conversation_routes cr "
+                    + "WHERE cr.conversation_id=o.conversation_id AND cr.state=2) "
+                    + "AND NOT EXISTS (SELECT 1 FROM im_control.slot_routes sr WHERE sr.slot_id=o.slot_id AND sr.state=2) "
+                    + "AND ((o.status=0 AND o.available_at<=UTC_TIMESTAMP(3)) "
+                    + "OR (o.status=1 AND o.lease_until<UTC_TIMESTAMP(3))) "
+                    + "ORDER BY o.id LIMIT ? FOR UPDATE SKIP LOCKED";
             List<OutboxEvent> events = jdbc.query(select,
                     (rs, rowNumber) -> mapEvent(tableGroup, rs), limit);
             if (events.isEmpty()) {

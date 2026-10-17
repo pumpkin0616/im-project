@@ -2,7 +2,7 @@ spring:
   application:
     name: im-project
   datasource:
-    url: ${IM_DB_URL:jdbc:mysql://127.0.0.1:3307/im_message?useUnicode=true&characterEncoding=utf8&serverTimezone=UTC}
+    url: ${IM_DB_URL:jdbc:mysql://127.0.0.1:3307/im_message?useUnicode=true&characterEncoding=utf8&serverTimezone=UTC&useCursorFetch=true&defaultFetchSize=500}
     username: ${IM_DB_USERNAME:im_app}
     password: ${IM_DB_PASSWORD:im_app}
     hikari:
@@ -12,6 +12,9 @@ spring:
       validation-timeout: 1000
   flyway:
     enabled: ${IM_FLYWAY_ENABLED:false}
+    baseline-on-migrate: true
+    baseline-version: 9
+    locations: classpath:db/migration
   jackson:
     default-property-inclusion: non_null
   data:
@@ -88,6 +91,13 @@ im:
     table-group-count: 8
     hash-seed: 0
     local-shard-id: ${IM_LOCAL_SHARD_ID:shard-0}
+    mode: ${IM_ROUTING_MODE:control-plane}
+    cache-ttl: ${IM_ROUTING_CACHE_TTL:30s}
+    revision-poll-interval: ${IM_ROUTING_REVISION_POLL_INTERVAL:1s}
+    cache-max-entries: ${IM_ROUTING_CACHE_MAX_ENTRIES:100000}
+    admin-secret: ${IM_ROUTING_ADMIN_SECRET:local-routing-secret-change-me}
+    migration-batch-size: ${IM_ROUTING_MIGRATION_BATCH_SIZE:500}
+    migration-shards: {}
   message:
     automatic-retry-window: 24h
     max-clock-skew: 5m

@@ -37,6 +37,7 @@ services:
       - ./sql/012_stage4_history_attachment_schema.sql:/docker-entrypoint-initdb.d/005_stage4_history_attachment_schema.sql:ro
       - ./sql/013_stage5_gateway_schema.sql:/docker-entrypoint-initdb.d/006_stage5_gateway_schema.sql:ro
       - ./sql/014_stage9_product_completion_schema.sql:/docker-entrypoint-initdb.d/007_stage9_product_completion_schema.sql:ro
+      - ./sql/015_stage10_routing_migration_schema.sql:/docker-entrypoint-initdb.d/008_stage10_routing_migration_schema.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p$$MYSQL_ROOT_PASSWORD --silent"]
       interval: 3s
@@ -126,11 +127,13 @@ services:
     build:
       context: .
     environment:
-      IM_DB_URL: jdbc:mysql://mysql:3306/im_message?useUnicode=true&characterEncoding=utf8&serverTimezone=UTC
+      IM_DB_URL: jdbc:mysql://mysql:3306/im_message?useUnicode=true&characterEncoding=utf8&serverTimezone=UTC&useCursorFetch=true&defaultFetchSize=500
       # jdbc:mysql://127.0.0.1:3306/im_message?useUnicode=true&characterEncoding=utf8&serverTimezone=UTC
       IM_DB_USERNAME: im_app
       IM_DB_PASSWORD: im_app
       IM_LOCAL_SHARD_ID: shard-0
+      IM_ROUTING_MODE: control-plane
+      IM_ROUTING_ADMIN_SECRET: local-routing-secret-change-me
       IM_ROCKETMQ_ENABLED: "true"
       IM_ROCKETMQ_ENDPOINTS: broker:8081
       IM_REDIS_HOST: redis

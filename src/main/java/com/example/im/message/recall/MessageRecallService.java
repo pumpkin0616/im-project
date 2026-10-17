@@ -8,6 +8,7 @@ import com.example.im.routing.ConversationRouteResolver;
 import com.example.im.routing.MessageTableNames;
 import com.example.im.routing.ResolvedRoute;
 import com.example.im.routing.UuidCodec;
+import com.example.im.routing.RouteWriteGuard;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -33,13 +34,16 @@ final class MessageRecallService {
     private final UuidV7Generator ids;
     private final ObjectMapper objectMapper;
     private final String localShard;
+    private final RouteWriteGuard routeWriteGuard;
 
     MessageRecallService(JdbcTemplate jdbc, TransactionTemplate transactions,
                          ConversationRouteResolver routes, UuidV7Generator ids,
-                         ObjectMapper objectMapper, ImProperties properties) {
+                         ObjectMapper objectMapper, ImProperties properties,
+                         RouteWriteGuard routeWriteGuard) {
         this.jdbc = jdbc; this.transactions = transactions; this.routes = routes;
         this.ids = ids; this.objectMapper = objectMapper;
         this.localShard = properties.routing().localShardId();
+        this.routeWriteGuard = routeWriteGuard;
     }
 
     RecallView recall(UUID actor, UUID conversationId, long sequence) {
@@ -52,6 +56,7 @@ final class MessageRecallService {
 
     private RecallView recallInTransaction(UUID actor, UUID conversationId, long sequence,
                                            ResolvedRoute route, MessageTableNames tables) {
+        routeWriteGuard.lock(jdbc, route, conversationId);
         List<Integer> conversations = jdbc.query("SELECT status FROM " + tables.conversations()
                         + " WHERE id=? FOR UPDATE", (rs, n) -> rs.getInt(1), bytes(conversationId));
         if (conversations.isEmpty()) throw error("MESSAGE_NOT_FOUND", "Message does not exist", 404);

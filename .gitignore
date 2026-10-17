@@ -6,4 +6,6 @@ target/
 *.iml
 *.log
 .env
+__pycache__/
+*.pyc
 

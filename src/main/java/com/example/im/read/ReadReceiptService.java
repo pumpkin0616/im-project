@@ -7,6 +7,7 @@ import com.example.im.routing.ConversationRouteResolver;
 import com.example.im.routing.MessageTableNames;
 import com.example.im.routing.ResolvedRoute;
 import com.example.im.routing.UuidCodec;
+import com.example.im.routing.RouteWriteGuard;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -23,15 +24,17 @@ public final class ReadReceiptService {
     private final ConversationRouteResolver routes;
     private final RealtimeDeliveryRouter delivery;
     private final String localShard;
+    private final RouteWriteGuard routeWriteGuard;
 
     public ReadReceiptService(JdbcTemplate jdbc, TransactionTemplate transactions,
                               ConversationRouteResolver routes, RealtimeDeliveryRouter delivery,
-                              ImProperties properties) {
+                              ImProperties properties, RouteWriteGuard routeWriteGuard) {
         this.jdbc = jdbc;
         this.transactions = transactions;
         this.routes = routes;
         this.delivery = delivery;
         this.localShard = properties.routing().localShardId();
+        this.routeWriteGuard = routeWriteGuard;
     }
 
     public ReadUpdate advance(UUID userId, UUID conversationId, long requestedSequence) {
@@ -50,6 +53,7 @@ public final class ReadReceiptService {
     private State advanceInTransaction(UUID userId, UUID conversationId, long requestedSequence) {
         ResolvedRoute route = routes.resolve(conversationId);
         if (!localShard.equals(route.shardId())) throw error("ROUTE_MISMATCH", "Conversation belongs to " + route.shardId(), 503);
+        routeWriteGuard.lock(jdbc, route, conversationId);
         MessageTableNames names = new MessageTableNames(route.tableGroup(), 0);
         List<ConversationState> conversations = jdbc.query("SELECT type,last_seq FROM " + names.conversations()
                         + " WHERE id=? AND status=1", (rs, n) -> new ConversationState(rs.getInt(1), rs.getLong(2)),

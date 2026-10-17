@@ -8,6 +8,7 @@ import com.example.im.routing.ConversationRouteResolver;
 import com.example.im.routing.MessageTableNames;
 import com.example.im.routing.ResolvedRoute;
 import com.example.im.routing.UuidCodec;
+import com.example.im.routing.RouteWriteGuard;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -36,12 +37,15 @@ final class ConversationService {
     private final ConversationRouteResolver routes;
     private final String localShard;
     private final ObjectMapper objectMapper;
+    private final RouteWriteGuard routeWriteGuard;
 
     ConversationService(JdbcTemplate jdbc, TransactionTemplate transactions, UuidV7Generator ids,
-                        ConversationRouteResolver routes, ImProperties properties, ObjectMapper objectMapper) {
+                        ConversationRouteResolver routes, ImProperties properties, ObjectMapper objectMapper,
+                        RouteWriteGuard routeWriteGuard) {
         this.jdbc=jdbc; this.transactions=transactions; this.ids=ids; this.routes=routes;
         this.localShard=properties.routing().localShardId();
         this.objectMapper=objectMapper;
+        this.routeWriteGuard=routeWriteGuard;
     }
 
     ConversationView createDirect(UUID user, UUID peer) {
@@ -56,6 +60,7 @@ final class ConversationService {
             UUID id=localConversationId(); ResolvedRoute route=routes.resolve(id); String c=conversations(route); String m=members(route);
             transactions.executeWithoutResult(status->{
                 Instant now=Instant.now();
+                routeWriteGuard.lock(jdbc,route,id);
                 jdbc.update("INSERT INTO im_control.direct_conversations(direct_key,conversation_id,created_at) VALUES(?,?,?)",key,b(id),Timestamp.from(now));
                 jdbc.update("INSERT INTO "+c+"(id,slot_id,route_epoch,write_state,type,direct_key,status,delivery_mode,last_seq,min_available_seq,member_version,created_at,updated_at) VALUES(?,?,?,1,1,?,1,1,0,1,1,?,?)",
                         b(id),route.slotId(),route.routeEpoch(),key,Timestamp.from(now),Timestamp.from(now));
@@ -79,6 +84,7 @@ final class ConversationService {
         UUID id=localConversationId(); ResolvedRoute route=routes.resolve(id); String c=conversations(route); String m=members(route);
         transactions.executeWithoutResult(status->{
             Instant now=Instant.now();
+            routeWriteGuard.lock(jdbc,route,id);
             jdbc.update("INSERT INTO "+c+"(id,slot_id,route_epoch,write_state,type,title,owner_id,status,delivery_mode,last_seq,min_available_seq,member_version,created_at,updated_at) VALUES(?,?,?,1,2,?,?,1,1,0,1,1,?,?)",
                     b(id),route.slotId(),route.routeEpoch(),request.title().trim(),b(owner),Timestamp.from(now),Timestamp.from(now));
             for(UUID member:all) insertMember(m,id,member,route.slotId(),member.equals(owner)?3:1,1,now);
@@ -203,9 +209,12 @@ final class ConversationService {
     private void mutate(UUID id,Mutation mutation) {
         ResolvedRoute route=localRoute(id); String c=conversations(route),m=members(route);
         transactions.executeWithoutResult(tx->{
-            List<ConversationState> rows=jdbc.query("SELECT type,status,last_seq,member_version FROM "+c+" WHERE id=? FOR UPDATE",
-                    (rs,n)->new ConversationState(rs.getInt(1),rs.getInt(2),rs.getLong(3),rs.getLong(4)),b(id));
+            routeWriteGuard.lock(jdbc,route,id);
+            List<ConversationState> rows=jdbc.query("SELECT type,status,last_seq,member_version,route_epoch,write_state FROM "+c+" WHERE id=? FOR UPDATE",
+                    (rs,n)->new ConversationState(rs.getInt(1),rs.getInt(2),rs.getLong(3),rs.getLong(4),rs.getLong(5),rs.getInt(6)),b(id));
             if(rows.isEmpty()) throw error("CONVERSATION_NOT_FOUND","Conversation does not exist",404);
+            if(rows.getFirst().routeEpoch()!=route.routeEpoch()||rows.getFirst().writeState()!=1)
+                throw error("ROUTE_STALE","Conversation has moved or is frozen",503);
             if(rows.getFirst().status()!=1) throw error("CONVERSATION_CLOSED","Conversation is not active",422);
             mutation.apply(route,c,m,rows.getFirst());
         });
@@ -294,7 +303,7 @@ final class ConversationService {
     private String typeNameForMessage(int type){return switch(type){case 1->"TEXT";case 2->"IMAGE";case 3->"FILE";default->"UNKNOWN";};}
     private String roleName(int role){return switch(role){case 3->"OWNER";case 2->"ADMIN";default->"MEMBER";};}
     private ApiBusinessException error(String code,String message,int status){return new ApiBusinessException(code,message,status);}
-    private record MemberState(int role,int status,long lastReadSeq){} private record ConversationState(int type,int status,long lastSeq,long memberVersion){}
+    private record MemberState(int role,int status,long lastReadSeq){} private record ConversationState(int type,int status,long lastSeq,long memberVersion,long routeEpoch,int writeState){}
     private record DirectoryEntry(UUID id,Instant activity){} private record DirectoryCursor(Instant activity,UUID id){}
     @FunctionalInterface private interface Mutation{void apply(ResolvedRoute route,String conversations,String members,ConversationState state);}
 }

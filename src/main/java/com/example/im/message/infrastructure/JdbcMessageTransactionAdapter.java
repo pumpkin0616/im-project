@@ -8,6 +8,7 @@ import com.example.im.message.domain.SendMessageResult;
 import com.example.im.routing.MessageTableNames;
 import com.example.im.routing.ResolvedRoute;
 import com.example.im.routing.UuidCodec;
+import com.example.im.routing.RouteWriteGuard;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.ObjectMapper;
 import org.springframework.dao.TransientDataAccessException;
@@ -35,19 +36,22 @@ public class JdbcMessageTransactionAdapter implements MessageTransactionPort {
     private final ObjectMapper objectMapper;
     private final UuidV7Generator uuidGenerator;
     private final String localShardId;
+    private final RouteWriteGuard routeWriteGuard;
 
     public JdbcMessageTransactionAdapter(
             JdbcTemplate jdbc,
             TransactionTemplate transactionTemplate,
             ObjectMapper objectMapper,
             UuidV7Generator uuidGenerator,
-            ImProperties properties
+            ImProperties properties,
+            RouteWriteGuard routeWriteGuard
     ) {
         this.jdbc = jdbc;
         this.transactionTemplate = transactionTemplate;
         this.objectMapper = objectMapper;
         this.uuidGenerator = uuidGenerator;
         this.localShardId = properties.routing().localShardId();
+        this.routeWriteGuard = routeWriteGuard;
     }
 
     @Override
@@ -88,7 +92,7 @@ public class JdbcMessageTransactionAdapter implements MessageTransactionPort {
             MessageTableNames tables
     ) {
         lockDedupGeneration(tables.dedupGeneration());
-        lockSlot(route);
+        routeWriteGuard.lock(jdbc, route, command.conversationId());
         ConversationState conversation = lockConversation(tables, command.conversationId());
         validateConversation(route, conversation);
 
@@ -139,23 +143,6 @@ public class JdbcMessageTransactionAdapter implements MessageTransactionPort {
         if (rows.isEmpty()) {
             throw new MessageRejectedException("DEDUP_GENERATION_UNAVAILABLE",
                     "The idempotency generation is not open", true);
-        }
-    }
-
-    private void lockSlot(ResolvedRoute route) {
-        List<Map<String, Object>> rows = jdbc.queryForList(
-                "SELECT route_epoch, writable FROM slot_fences WHERE slot_id = ? FOR SHARE",
-                route.slotId());
-        if (rows.isEmpty()) {
-            throw new MessageRejectedException("ROUTE_MISMATCH", "Slot fence is missing", true);
-        }
-        Map<String, Object> row = rows.getFirst();
-        long epoch = ((Number) row.get("route_epoch")).longValue();
-        Object rawWritable = row.get("writable");
-        boolean writable = rawWritable instanceof Boolean value
-                ? value : ((Number) rawWritable).intValue() != 0;
-        if (!writable || epoch != route.routeEpoch()) {
-            throw new MessageRejectedException("ROUTE_STALE", "Slot route is not writable", true);
         }
     }
 

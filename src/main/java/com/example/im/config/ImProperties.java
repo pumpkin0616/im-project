@@ -5,6 +5,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 import java.time.Duration;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Map;
 
 @ConfigurationProperties(prefix = "im")
 public record ImProperties(
@@ -16,7 +17,12 @@ public record ImProperties(
         Gateway gateway,
         Online online
 ) {
-    public record Routing(int slotCount, int tableGroupCount, long hashSeed, String localShardId) {
+    public record Routing(
+            int slotCount, int tableGroupCount, long hashSeed, String localShardId,
+            String mode, Duration cacheTtl, Duration revisionPollInterval,
+            int cacheMaxEntries, String adminSecret, int migrationBatchSize,
+            Map<String, ShardConnection> migrationShards
+    ) {
         public Routing {
             if (slotCount <= 0 || Integer.bitCount(slotCount) != 1) {
                 throw new IllegalArgumentException("slotCount must be a positive power of two");
@@ -27,6 +33,29 @@ public record ImProperties(
             if (localShardId == null || localShardId.isBlank()) {
                 throw new IllegalArgumentException("localShardId must not be blank");
             }
+            if (mode == null || mode.isBlank()) mode = "control-plane";
+            if (cacheTtl == null || cacheTtl.isNegative() || cacheTtl.isZero()) {
+                throw new IllegalArgumentException("routing cacheTtl must be positive");
+            }
+            if (revisionPollInterval == null || revisionPollInterval.isNegative() || revisionPollInterval.isZero()) {
+                throw new IllegalArgumentException("routing revisionPollInterval must be positive");
+            }
+            if (cacheMaxEntries <= 0) throw new IllegalArgumentException("routing cacheMaxEntries must be positive");
+            if (adminSecret == null || adminSecret.getBytes(java.nio.charset.StandardCharsets.UTF_8).length < 16) {
+                throw new IllegalArgumentException("routing adminSecret must contain at least 16 bytes");
+            }
+            if (migrationBatchSize <= 0 || migrationBatchSize > 10_000) {
+                throw new IllegalArgumentException("routing migrationBatchSize must be between 1 and 10000");
+            }
+            migrationShards = migrationShards == null ? Map.of() : Map.copyOf(migrationShards);
+        }
+    }
+
+    public record ShardConnection(String url, String username, String password, int maximumPoolSize) {
+        public ShardConnection {
+            if (url == null || url.isBlank()) throw new IllegalArgumentException("migration shard url is required");
+            if (username == null || username.isBlank()) throw new IllegalArgumentException("migration shard username is required");
+            if (maximumPoolSize <= 0) maximumPoolSize = 4;
         }
     }
 

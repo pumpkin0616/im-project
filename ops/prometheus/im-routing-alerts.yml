@@ -1,0 +1,43 @@
+groups:
+  - name: im-routing
+    rules:
+      - alert: ImRoutingSlotTableIncomplete
+        expr: im_routing_slot_routes != 1024
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: IM routing table does not contain all 1024 slots
+
+      - alert: ImRoutingMigrationFailed
+        expr: increase(im_routing_migrations_total{result="failed"}[5m]) > 0
+        labels:
+          severity: critical
+        annotations:
+          summary: An IM route migration failed in the last five minutes
+
+      - alert: ImRoutingMigrationStuck
+        expr: im_routing_active_migrations > 0 and im_routing_oldest_active_migration_seconds > 300
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: An IM route migration has remained active for over five minutes
+
+      - alert: ImRoutingCacheMissRateHigh
+        expr: |
+          sum(rate(im_routing_cache_total{result="miss"}[5m]))
+          /
+          clamp_min(sum(rate(im_routing_cache_total[5m])), 0.001) > 0.30
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: IM route cache miss ratio is above 30 percent
+
+      - alert: ImRoutingMetricsRefreshFailed
+        expr: increase(im_routing_metrics_refresh_failures_total[5m]) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: IM routing control-plane metrics could not be refreshed
