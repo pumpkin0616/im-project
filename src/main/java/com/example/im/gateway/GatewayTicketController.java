@@ -10,20 +10,21 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.UUID;
 
+// HTTP 入口：已登录用户来领门票
 @RestController
 @RequestMapping("/api/v1/ws/tickets")
 public final class GatewayTicketController {
-    private final GatewayTicketService service;
+  private final GatewayTicketService service;
 
-    public GatewayTicketController(GatewayTicketService service) {
-        this.service = service;
-    }
+  public GatewayTicketController(GatewayTicketService service) {
+    this.service = service;
+  }
 
-    @PostMapping
-    @ResponseStatus(HttpStatus.CREATED)
-    GatewayTicketService.TicketResponse issue(@AuthenticationPrincipal Jwt jwt) {
-        return service.issue(UUID.fromString(jwt.getSubject()),
-                UUID.fromString(jwt.getClaimAsString("sid")),
-                UUID.fromString(jwt.getClaimAsString("did")));
-    }
+  @PostMapping
+  @ResponseStatus(HttpStatus.CREATED)
+  GatewayTicketService.TicketResponse issue(@AuthenticationPrincipal Jwt jwt) {
+    return service.issue(UUID.fromString(jwt.getSubject()),
+        UUID.fromString(jwt.getClaimAsString("sid")),
+        UUID.fromString(jwt.getClaimAsString("did")));
+  }
 }

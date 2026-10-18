@@ -1,0 +1,132 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1250" viewBox="0 0 1600 1250">
+  <defs>
+    <style>
+      text { font-family: "Source Han Sans CN", "PingFang SC", sans-serif; fill: #172033; }
+      .title { font-size: 38px; font-weight: 700; }
+      .subtitle { font-size: 22px; fill: #516078; }
+      .box-title { font-size: 25px; font-weight: 700; }
+      .body { font-size: 20px; }
+      .small { font-size: 17px; fill: #516078; }
+      .label { font-size: 18px; font-weight: 600; fill: #42526b; }
+      .box { stroke-width: 2.5; rx: 18; }
+      .arrow { fill: none; stroke: #65758b; stroke-width: 4; marker-end: url(#arrow); }
+      .dash { fill: none; stroke: #d2604c; stroke-width: 4; stroke-dasharray: 10 8; marker-end: url(#arrow-red); }
+    </style>
+    <marker id="arrow" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto">
+      <path d="M0,0 L12,6 L0,12 z" fill="#65758b"/>
+    </marker>
+    <marker id="arrow-red" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto">
+      <path d="M0,0 L12,6 L0,12 z" fill="#d2604c"/>
+    </marker>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="130%">
+      <feDropShadow dx="0" dy="5" stdDeviation="6" flood-color="#26344d" flood-opacity="0.13"/>
+    </filter>
+  </defs>
+
+  <rect width="1600" height="1250" fill="#f5f7fb"/>
+  <text x="800" y="64" text-anchor="middle" class="title">第十阶段：Outbox 与 RocketMQ 完整链路</text>
+  <text x="800" y="101" text-anchor="middle" class="subtitle">先可靠落库，再异步发布；RocketMQ 故障不会丢失已提交消息</text>
+
+  <rect x="65" y="150" width="230" height="120" class="box" fill="#e8f0ff" stroke="#4777d9" filter="url(#shadow)"/>
+  <text x="180" y="195" text-anchor="middle" class="box-title">用户 A</text>
+  <text x="180" y="232" text-anchor="middle" class="body">发送“你好”</text>
+
+  <rect x="385" y="150" width="270" height="120" class="box" fill="#e9f7f1" stroke="#399c72" filter="url(#shadow)"/>
+  <text x="520" y="195" text-anchor="middle" class="box-title">消息服务</text>
+  <text x="520" y="232" text-anchor="middle" class="body">开启 MySQL 事务</text>
+
+  <rect x="765" y="135" width="390" height="150" class="box" fill="#fff6df" stroke="#d59a24" filter="url(#shadow)"/>
+  <text x="960" y="178" text-anchor="middle" class="box-title">同一个数据库事务</text>
+  <text x="960" y="216" text-anchor="middle" class="body">① 写 messages_XX</text>
+  <text x="960" y="248" text-anchor="middle" class="body">② 写 send_dedup_XX　③ 写 outbox_XX</text>
+
+  <rect x="1265" y="150" width="270" height="120" class="box" fill="#e8f0ff" stroke="#4777d9" filter="url(#shadow)"/>
+  <text x="1400" y="195" text-anchor="middle" class="box-title">SEND_ACK</text>
+  <text x="1400" y="232" text-anchor="middle" class="body">表示事务已提交</text>
+
+  <path d="M295 210 H365" class="arrow"/>
+  <path d="M655 210 H745" class="arrow"/>
+  <path d="M1155 210 H1245" class="arrow"/>
+  <text x="330" y="191" text-anchor="middle" class="label">SEND</text>
+  <text x="1205" y="191" text-anchor="middle" class="label">COMMIT</text>
+
+  <rect x="65" y="365" width="300" height="145" class="box" fill="#f0ebff" stroke="#7a59c7" filter="url(#shadow)"/>
+  <text x="215" y="410" text-anchor="middle" class="box-title">Outbox Publisher</text>
+  <text x="215" y="448" text-anchor="middle" class="body">每 100ms 扫描一次</text>
+  <text x="215" y="480" text-anchor="middle" class="small">一次最多领取 200 条</text>
+
+  <rect x="495" y="350" width="350" height="175" class="box" fill="#fff6df" stroke="#d59a24" filter="url(#shadow)"/>
+  <text x="670" y="395" text-anchor="middle" class="box-title">outbox_00 ～ outbox_07</text>
+  <text x="670" y="435" text-anchor="middle" class="body">status 0 → 1</text>
+  <text x="670" y="468" text-anchor="middle" class="body">领取租约 30 秒，attempts + 1</text>
+  <text x="670" y="500" text-anchor="middle" class="small">FOR UPDATE SKIP LOCKED</text>
+
+  <rect x="975" y="365" width="265" height="145" class="box" fill="#ffe9e6" stroke="#d2604c" filter="url(#shadow)"/>
+  <text x="1107" y="410" text-anchor="middle" class="box-title">RocketMQ</text>
+  <text x="1107" y="448" text-anchor="middle" class="body">FIFO Topic</text>
+  <text x="1107" y="480" text-anchor="middle" class="small">MessageGroup = conversationId</text>
+
+  <rect x="1350" y="365" width="185" height="145" class="box" fill="#e9f7f1" stroke="#399c72" filter="url(#shadow)"/>
+  <text x="1442" y="410" text-anchor="middle" class="box-title">成功</text>
+  <text x="1442" y="448" text-anchor="middle" class="body">status = 2</text>
+  <text x="1442" y="480" text-anchor="middle" class="small">写 published_at</text>
+
+  <path d="M365 438 H475" class="arrow"/>
+  <path d="M845 438 H955" class="arrow"/>
+  <path d="M1240 438 H1330" class="arrow"/>
+  <text x="420" y="418" text-anchor="middle" class="label">领取</text>
+  <text x="900" y="418" text-anchor="middle" class="label">异步发布</text>
+  <text x="1285" y="418" text-anchor="middle" class="label">确认</text>
+
+  <rect x="65" y="650" width="270" height="140" class="box" fill="#ffe9e6" stroke="#d2604c" filter="url(#shadow)"/>
+  <text x="200" y="697" text-anchor="middle" class="box-title">MQ 消费者</text>
+  <text x="200" y="736" text-anchor="middle" class="body">读取事件定位信息</text>
+  <text x="200" y="768" text-anchor="middle" class="small">MESSAGE_CREATED</text>
+
+  <rect x="440" y="650" width="270" height="140" class="box" fill="#fff6df" stroke="#d59a24" filter="url(#shadow)"/>
+  <text x="575" y="697" text-anchor="middle" class="box-title">重新查询 MySQL</text>
+  <text x="575" y="736" text-anchor="middle" class="body">正文、附件、接收成员</text>
+  <text x="575" y="768" text-anchor="middle" class="small">MySQL 是最终真相</text>
+
+  <rect x="815" y="650" width="250" height="140" class="box" fill="#e6f8f6" stroke="#29998d" filter="url(#shadow)"/>
+  <text x="940" y="697" text-anchor="middle" class="box-title">查询 Redis</text>
+  <text x="940" y="736" text-anchor="middle" class="body">接收者在哪台网关</text>
+  <text x="940" y="768" text-anchor="middle" class="small">在线路由</text>
+
+  <rect x="1170" y="650" width="200" height="140" class="box" fill="#f0ebff" stroke="#7a59c7" filter="url(#shadow)"/>
+  <text x="1270" y="697" text-anchor="middle" class="box-title">Netty 网关</text>
+  <text x="1270" y="736" text-anchor="middle" class="body">找到 Channel</text>
+  <text x="1270" y="768" text-anchor="middle" class="small">实时推送</text>
+
+  <rect x="1450" y="650" width="115" height="140" class="box" fill="#e8f0ff" stroke="#4777d9" filter="url(#shadow)"/>
+  <text x="1507" y="697" text-anchor="middle" class="box-title">用户 B</text>
+  <text x="1507" y="741" text-anchor="middle" class="body">MESSAGE</text>
+
+  <path d="M1107 510 V590 H200 V630" class="arrow"/>
+  <path d="M335 720 H420" class="arrow"/>
+  <path d="M710 720 H795" class="arrow"/>
+  <path d="M1065 720 H1150" class="arrow"/>
+  <path d="M1370 720 H1430" class="arrow"/>
+
+  <rect x="65" y="900" width="1500" height="275" class="box" fill="#fff" stroke="#c7cfdb" filter="url(#shadow)"/>
+  <text x="815" y="950" text-anchor="middle" class="box-title">RocketMQ 故障时为什么不会丢消息</text>
+
+  <rect x="125" y="1000" width="300" height="105" class="box" fill="#fff6df" stroke="#d59a24"/>
+  <text x="275" y="1043" text-anchor="middle" class="body">Outbox 保留 status=0</text>
+  <text x="275" y="1077" text-anchor="middle" class="small">正式消息已经在 MySQL</text>
+
+  <rect x="650" y="1000" width="300" height="105" class="box" fill="#ffe9e6" stroke="#d2604c"/>
+  <text x="800" y="1043" text-anchor="middle" class="body">按 1、2、4、8…秒重试</text>
+  <text x="800" y="1077" text-anchor="middle" class="small">最长等待 60 秒</text>
+
+  <rect x="1175" y="1000" width="300" height="105" class="box" fill="#e9f7f1" stroke="#399c72"/>
+  <text x="1325" y="1043" text-anchor="middle" class="body">MQ 恢复后最终发布</text>
+  <text x="1325" y="1077" text-anchor="middle" class="small">接收者也可通过历史同步补回</text>
+
+  <path d="M425 1052 H630" class="dash"/>
+  <path d="M950 1052 H1155" class="arrow"/>
+  <text x="537" y="1032" text-anchor="middle" class="label">发布失败</text>
+  <text x="1052" y="1032" text-anchor="middle" class="label">恢复</text>
+
+  <text x="800" y="1215" text-anchor="middle" class="subtitle">核心：MySQL 保证不丢，RocketMQ 负责解耦与实时传递，客户端负责重复事件去重</text>
+</svg>

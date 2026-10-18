@@ -17,52 +17,51 @@ import java.util.List;
 
 @Component
 public final class CanonicalMessageHasher {
-    private final ObjectMapper objectMapper;
+  private final ObjectMapper objectMapper;
 
-    public CanonicalMessageHasher(ObjectMapper objectMapper) {
-        this.objectMapper = objectMapper;
-    }
+  public CanonicalMessageHasher(ObjectMapper objectMapper) {
+    this.objectMapper = objectMapper;
+  }
 
-    public byte[] hash(SendMessageCommand command) {
-        ObjectNode root = objectMapper.createObjectNode();
-        root.put("conversationId", command.conversationId().toString());
-        root.put("type", command.type().name());
-        root.set("content", canonicalize(command.content()));
-        ArrayNode attachments = root.putArray("attachmentIds");
-        command.attachmentIds().stream()
-                .map(Object::toString)
-                .sorted()
-                .forEach(attachments::add);
-        try {
-            return sha256(objectMapper.writeValueAsString(root));
-        } catch (JacksonException exception) {
-            throw new IllegalArgumentException("Message content cannot be canonicalized", exception);
-        }
+  public byte[] hash(SendMessageCommand command) {
+    ObjectNode root = objectMapper.createObjectNode();
+    root.put("conversationId", command.conversationId().toString());
+    root.put("type", command.type().name());
+    root.set("content", canonicalize(command.content()));
+    ArrayNode attachments = root.putArray("attachmentIds");
+    command.attachmentIds().stream()
+        .map(Object::toString)
+        .sorted()
+        .forEach(attachments::add);
+    try {
+      return sha256(objectMapper.writeValueAsString(root));
+    } catch (JacksonException exception) {
+      throw new IllegalArgumentException("Message content cannot be canonicalized", exception);
     }
+  }
 
-    private JsonNode canonicalize(JsonNode node) {
-        if (node == null || node.isNull() || node.isValueNode()) {
-            return node;
-        }
-        if (node.isArray()) {
-            ArrayNode result = objectMapper.createArrayNode();
-            node.forEach(child -> result.add(canonicalize(child)));
-            return result;
-        }
-        List<String> names = new ArrayList<>(node.propertyNames());
-        names.sort(Comparator.naturalOrder());
-        ObjectNode result = objectMapper.createObjectNode();
-        names.forEach(name -> result.set(name, canonicalize(node.get(name))));
-        return result;
+  private JsonNode canonicalize(JsonNode node) {
+    if (node == null || node.isNull() || node.isValueNode()) {
+      return node;
     }
+    if (node.isArray()) {
+      ArrayNode result = objectMapper.createArrayNode();
+      node.forEach(child -> result.add(canonicalize(child)));
+      return result;
+    }
+    List<String> names = new ArrayList<>(node.propertyNames());
+    names.sort(Comparator.naturalOrder());
+    ObjectNode result = objectMapper.createObjectNode();
+    names.forEach(name -> result.set(name, canonicalize(node.get(name))));
+    return result;
+  }
 
-    private static byte[] sha256(String value) {
-        try {
-            return MessageDigest.getInstance("SHA-256")
-                    .digest(value.getBytes(StandardCharsets.UTF_8));
-        } catch (NoSuchAlgorithmException impossible) {
-            throw new IllegalStateException("SHA-256 is unavailable", impossible);
-        }
+  private static byte[] sha256(String value) {
+    try {
+      return MessageDigest.getInstance("SHA-256")
+          .digest(value.getBytes(StandardCharsets.UTF_8));
+    } catch (NoSuchAlgorithmException impossible) {
+      throw new IllegalStateException("SHA-256 is unavailable", impossible);
     }
+  }
 }
-

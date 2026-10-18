@@ -13,22 +13,74 @@ import java.util.UUID;
 @RestController
 @RequestMapping("/api/v1")
 public final class FriendController {
-    private final FriendService service;
-    public FriendController(FriendService service){this.service=service;}
-    private UUID user(Jwt jwt){return UUID.fromString(jwt.getSubject());}
+  private final FriendService service;
 
-    @PostMapping("/friend-requests") @ResponseStatus(HttpStatus.CREATED)
-    RequestView create(@AuthenticationPrincipal Jwt jwt,@Valid @RequestBody CreateRequest request){return service.create(user(jwt),request);}
-    @GetMapping("/users/search")
-    List<UserSearchView> search(@AuthenticationPrincipal Jwt jwt,@RequestParam String q,
-                                @RequestParam(defaultValue="20") int limit){return service.searchUsers(user(jwt),q,limit);}
-    @GetMapping("/friend-requests") List<RequestView> requests(@AuthenticationPrincipal Jwt jwt,@RequestParam(defaultValue="incoming") String direction){return service.requests(user(jwt),direction);}
-    @PostMapping("/friend-requests/{id}/accept") RequestView accept(@AuthenticationPrincipal Jwt jwt,@PathVariable UUID id){return service.handle(user(jwt),id,true);}
-    @PostMapping("/friend-requests/{id}/reject") RequestView reject(@AuthenticationPrincipal Jwt jwt,@PathVariable UUID id){return service.handle(user(jwt),id,false);}
-    @DeleteMapping("/friend-requests/{id}") RequestView cancel(@AuthenticationPrincipal Jwt jwt,@PathVariable UUID id){return service.cancel(user(jwt),id);}
-    @GetMapping("/friends") List<FriendView> friends(@AuthenticationPrincipal Jwt jwt){return service.friends(user(jwt));}
-    @DeleteMapping("/friends/{id}") @ResponseStatus(HttpStatus.NO_CONTENT) void remove(@AuthenticationPrincipal Jwt jwt,@PathVariable UUID id){service.remove(user(jwt),id);}
-    @PutMapping("/blocks/{id}") @ResponseStatus(HttpStatus.NO_CONTENT) void block(@AuthenticationPrincipal Jwt jwt,@PathVariable UUID id){service.block(user(jwt),id);}
-    @GetMapping("/blocks") List<BlockView> blocks(@AuthenticationPrincipal Jwt jwt){return service.blocks(user(jwt));}
-    @DeleteMapping("/blocks/{id}") @ResponseStatus(HttpStatus.NO_CONTENT) void unblock(@AuthenticationPrincipal Jwt jwt,@PathVariable UUID id){service.unblock(user(jwt),id);}
+  public FriendController(FriendService service) {
+    this.service = service;
+  }
+
+  private UUID user(Jwt jwt) {
+    return UUID.fromString(jwt.getSubject());
+  }
+
+  @PostMapping("/friend-requests")
+  @ResponseStatus(HttpStatus.CREATED)
+  RequestView create(@AuthenticationPrincipal Jwt jwt, @Valid @RequestBody CreateRequest request) {
+    return service.create(user(jwt), request);
+  }
+
+  @GetMapping("/users/search")
+  List<UserSearchView> search(@AuthenticationPrincipal Jwt jwt, @RequestParam String q,
+      @RequestParam(defaultValue = "20") int limit) {
+    return service.searchUsers(user(jwt), q, limit);
+  }
+
+  @GetMapping("/friend-requests")
+  List<RequestView> requests(@AuthenticationPrincipal Jwt jwt,
+      @RequestParam(defaultValue = "incoming") String direction) {
+    return service.requests(user(jwt), direction);
+  }
+
+  @PostMapping("/friend-requests/{id}/accept")
+  RequestView accept(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID id) {
+    return service.handle(user(jwt), id, true);
+  }
+
+  @PostMapping("/friend-requests/{id}/reject")
+  RequestView reject(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID id) {
+    return service.handle(user(jwt), id, false);
+  }
+
+  @DeleteMapping("/friend-requests/{id}")
+  RequestView cancel(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID id) {
+    return service.cancel(user(jwt), id);
+  }
+
+  @GetMapping("/friends")
+  List<FriendView> friends(@AuthenticationPrincipal Jwt jwt) {
+    return service.friends(user(jwt));
+  }
+
+  @DeleteMapping("/friends/{id}")
+  @ResponseStatus(HttpStatus.NO_CONTENT)
+  void remove(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID id) {
+    service.remove(user(jwt), id);
+  }
+
+  @PutMapping("/blocks/{id}")
+  @ResponseStatus(HttpStatus.NO_CONTENT)
+  void block(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID id) {
+    service.block(user(jwt), id);
+  }
+
+  @GetMapping("/blocks")
+  List<BlockView> blocks(@AuthenticationPrincipal Jwt jwt) {
+    return service.blocks(user(jwt));
+  }
+
+  @DeleteMapping("/blocks/{id}")
+  @ResponseStatus(HttpStatus.NO_CONTENT)
+  void unblock(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID id) {
+    service.unblock(user(jwt), id);
+  }
 }
