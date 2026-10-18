@@ -7,6 +7,8 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
+import io.micrometer.core.instrument.Gauge;
+import io.micrometer.core.instrument.MeterRegistry;
 
 import java.util.List;
 import java.util.UUID;
@@ -28,12 +30,16 @@ final class OutboxPublisherWorker {
 
     OutboxPublisherWorker(JdbcOutboxRepository repository, OutboxEventPublisher publisher,
                           ImProperties properties,
-                          @Qualifier("outboxCompletionExecutor") Executor completionExecutor) {
+                          @Qualifier("outboxCompletionExecutor") Executor completionExecutor,
+                          MeterRegistry meters) {
         this.repository = repository;
         this.publisher = publisher;
         this.properties = properties;
         this.completionExecutor = completionExecutor;
         this.inFlight = new Semaphore(properties.rocketmq().outboxMaxInFlight());
+        int maximum = properties.rocketmq().outboxMaxInFlight();
+        Gauge.builder("im.outbox.inflight", inFlight, value -> maximum - value.availablePermits())
+                .register(meters);
     }
 
     @Scheduled(fixedDelayString = "${im.rocketmq.outbox-poll-interval-ms:100}")

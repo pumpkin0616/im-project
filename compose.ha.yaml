@@ -1,0 +1,75 @@
+x-im-app: &im-app
+  profiles: [ha]
+  image: im-local-app:stage12
+  build: { context: . }
+  environment: &im-app-env
+    IM_DB_URL: jdbc:mysql://mysql:3306/im_message?useUnicode=true&characterEncoding=utf8&serverTimezone=UTC&useCursorFetch=true&defaultFetchSize=500
+    IM_DB_USERNAME: im_app
+    IM_DB_PASSWORD: im_app
+    IM_LOCAL_SHARD_ID: shard-0
+    IM_ROUTING_MODE: control-plane
+    IM_ROUTING_ADMIN_SECRET: local-routing-secret-change-me
+    IM_ROCKETMQ_ENABLED: "true"
+    IM_ROCKETMQ_ENDPOINTS: broker:8081
+    IM_REDIS_HOST: redis
+    IM_REDIS_PORT: 6379
+    IM_GATEWAY_DISPATCH_SECRET: local-dispatch-secret-change-me
+    IM_STORAGE_ROOT: /app/data/attachments
+    IM_ARCHIVE_ROOT: /app/data/archive
+    IM_LIFECYCLE_ADMIN_SECRET: local-lifecycle-secret-change-me
+    IM_GATEWAY_PORT: 18081
+    IM_GATEWAY_PUBLIC_URL: ws://127.0.0.1:28081/ws
+    IM_GATEWAY_ALLOWED_ORIGINS: http://localhost:3000,http://127.0.0.1:3000
+  volumes:
+    - attachment-data:/app/data/attachments
+    - archive-data:/app/data/archive
+  depends_on:
+    mysql: { condition: service_healthy }
+    redis: { condition: service_healthy }
+    broker: { condition: service_healthy }
+    rocketmq-init: { condition: service_completed_successfully }
+  healthcheck:
+    test: [CMD-SHELL, "wget -q -O- http://127.0.0.1:8080/actuator/health/readiness | grep -q UP"]
+    interval: 5s
+    timeout: 3s
+    retries: 30
+  restart: unless-stopped
+
+services:
+  app-a:
+    <<: *im-app
+    environment:
+      <<: *im-app-env
+      IM_GATEWAY_ID: gateway-ha-a
+      IM_GATEWAY_DISPATCH_URL: http://app-a:8080/internal/v1/gateway/dispatch
+    networks:
+      default:
+        aliases: [app]
+
+  app-b:
+    <<: *im-app
+    environment:
+      <<: *im-app-env
+      IM_GATEWAY_ID: gateway-ha-b
+      IM_GATEWAY_DISPATCH_URL: http://app-b:8080/internal/v1/gateway/dispatch
+    networks:
+      default:
+        aliases: [app]
+
+  ha-lb:
+    profiles: [ha]
+    image: nginx:1.27-alpine
+    ports:
+      - "28080:8080"
+      - "28081:18081"
+    volumes:
+      - ./infra/nginx/ha.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      app-a: { condition: service_healthy }
+      app-b: { condition: service_healthy }
+    healthcheck:
+      test: [CMD-SHELL, "wget -q -O- http://127.0.0.1:8080/actuator/health/readiness | grep -q UP"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped

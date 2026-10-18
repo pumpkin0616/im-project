@@ -1,0 +1,66 @@
+groups:
+  - name: im-availability
+    rules:
+      - alert: ImApiErrorRateHigh
+        expr: |
+          sum(rate(http_server_requests_seconds_count{uri!~"/actuator.*",status=~"5.."}[5m]))
+          / clamp_min(sum(rate(http_server_requests_seconds_count{uri!~"/actuator.*"}[5m])), 0.001) > 0.001
+        for: 5m
+        labels: { severity: critical }
+        annotations: { summary: "IM API 5xx rate is above 0.1 percent" }
+
+      - alert: ImApiP99LatencyHigh
+        expr: |
+          histogram_quantile(0.99,
+            sum by (le) (rate(http_server_requests_seconds_bucket{uri="/api/v1/messages"}[5m]))) > 1
+        for: 10m
+        labels: { severity: warning }
+        annotations: { summary: "Message send p99 latency is above one second" }
+
+      - alert: ImInstanceUnavailable
+        expr: up{job="im-app"} == 0
+        for: 1m
+        labels: { severity: critical }
+        annotations: { summary: "An IM application instance is unavailable" }
+
+  - name: im-reliability
+    rules:
+      - alert: ImOutboxBacklogHigh
+        expr: im_outbox_backlog > 100000
+        for: 5m
+        labels: { severity: critical }
+        annotations: { summary: "IM Outbox backlog exceeds 100,000 events" }
+
+      - alert: ImOutboxOldestEventDelayed
+        expr: im_outbox_oldest_unpublished_seconds > 60
+        for: 5m
+        labels: { severity: critical }
+        annotations: { summary: "The oldest unpublished IM event is delayed over 60 seconds" }
+
+      - alert: ImOutboxManualInterventionRequired
+        expr: im_outbox_manual > 0
+        for: 1m
+        labels: { severity: critical }
+        annotations: { summary: "IM Outbox contains events requiring manual intervention" }
+
+      - alert: ImOutboxMetricsUnavailable
+        expr: increase(im_outbox_metrics_refresh_failures_total[5m]) > 0
+        labels: { severity: warning }
+        annotations: { summary: "IM Outbox metrics could not be refreshed" }
+
+      - alert: ImRealtimeDeliveryFailures
+        expr: increase(im_delivery_events_failure_total[5m]) > 0
+        labels: { severity: warning }
+        annotations: { summary: "Realtime delivery is retrying failed events" }
+
+      - alert: ImGatewayBusy
+        expr: rate(im_gateway_operations_busy_total[5m]) > 1
+        for: 5m
+        labels: { severity: warning }
+        annotations: { summary: "IM gateway business capacity is saturated" }
+
+      - alert: ImDatabasePoolPending
+        expr: hikaricp_connections_pending > 0
+        for: 2m
+        labels: { severity: warning }
+        annotations: { summary: "IM database connection pool has waiting requests" }

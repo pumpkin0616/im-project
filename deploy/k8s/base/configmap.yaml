@@ -1,0 +1,28 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: im-config
+data:
+  IM_DB_URL: jdbc:mysql://mysql-ha.database.svc.cluster.local:3306/im_message?useUnicode=true&characterEncoding=utf8&serverTimezone=UTC&useCursorFetch=true&defaultFetchSize=500
+  IM_REDIS_HOST: redis-ha.cache.svc.cluster.local
+  IM_REDIS_PORT: "6379"
+  IM_ROCKETMQ_ENABLED: "true"
+  IM_ROCKETMQ_ENDPOINTS: rocketmq-proxy.messaging.svc.cluster.local:8081
+  IM_GATEWAY_ENABLED: "true"
+  IM_GATEWAY_PUBLIC_URL: wss://im.example.com/ws
+  IM_GATEWAY_ALLOWED_ORIGINS: https://im.example.com
+  IM_ROUTING_MODE: control-plane
+  IM_LOCAL_SHARD_ID: shard-0
+  IM_DB_POOL_SIZE: "64"
+  IM_DB_MIN_IDLE: "16"
+  IM_GATEWAY_WORKER_THREADS: "16"
+  IM_GATEWAY_BUSINESS_THREADS: "32"
+  IM_GATEWAY_BUSINESS_QUEUE_CAPACITY: "8192"
+  IM_GATEWAY_MAX_IN_FLIGHT: "8192"
+  IM_OUTBOX_MAX_IN_FLIGHT: "10000"
+  IM_OUTBOX_BATCH_SIZE: "500"
+  IM_ARCHIVE_ENABLED: "false"
+  IM_ARCHIVE_ROOT: /data/archive
+  IM_STORAGE_ROOT: /data/attachments
+  SERVER_SHUTDOWN: graceful
+  SPRING_LIFECYCLE_TIMEOUT_PER_SHUTDOWN_PHASE: 45s

@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: im-shared-data
+spec:
+  accessModes: [ReadWriteMany]
+  resources:
+    requests:
+      storage: 500Gi
+  storageClassName: replace-with-rwx-storage-class

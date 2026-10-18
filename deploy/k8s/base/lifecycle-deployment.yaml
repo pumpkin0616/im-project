@@ -1,0 +1,44 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: im-lifecycle-worker
+spec:
+  replicas: 1
+  strategy: { type: Recreate }
+  selector:
+    matchLabels: { app.kubernetes.io/name: im-lifecycle-worker }
+  template:
+    metadata:
+      labels: { app.kubernetes.io/name: im-lifecycle-worker }
+    spec:
+      terminationGracePeriodSeconds: 60
+      containers:
+        - name: worker
+          image: ghcr.io/example/im-app:replace-with-immutable-tag
+          envFrom:
+            - configMapRef: { name: im-config }
+            - secretRef: { name: im-secrets }
+          env:
+            - { name: IM_ARCHIVE_ENABLED, value: "true" }
+            - { name: IM_GATEWAY_ENABLED, value: "false" }
+            - { name: IM_ONLINE_ENABLED, value: "false" }
+            - { name: IM_ROCKETMQ_ENABLED, value: "false" }
+            - { name: IM_GATEWAY_ID, value: lifecycle-worker }
+            - { name: JAVA_TOOL_OPTIONS, value: "-XX:MaxRAMPercentage=75 -XX:+UseG1GC -XX:+ExitOnOutOfMemoryError" }
+          startupProbe:
+            httpGet: { path: /actuator/health/liveness, port: 8080 }
+            periodSeconds: 5
+            failureThreshold: 30
+          readinessProbe:
+            httpGet: { path: /actuator/health/readiness, port: 8080 }
+          livenessProbe:
+            httpGet: { path: /actuator/health/liveness, port: 8080 }
+            periodSeconds: 10
+          resources:
+            requests: { cpu: "1", memory: 2Gi }
+            limits: { cpu: "2", memory: 4Gi }
+          volumeMounts:
+            - { name: shared-data, mountPath: /data }
+      volumes:
+        - name: shared-data
+          persistentVolumeClaim: { claimName: im-shared-data }

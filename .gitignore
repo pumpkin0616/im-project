@@ -2,6 +2,7 @@
 .idea/
 .vscode/
 target/
+load/generated/
 .m2/
 *.iml
 *.log

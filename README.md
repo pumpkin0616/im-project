@@ -34,6 +34,9 @@
 - 槽位/单会话在线迁移、epoch 写栅栏、迁移校验与源数据封存。
 - Flyway V10、路由健康检查、Prometheus 指标和受密钥保护的运维接口。
 - MySQL 日分区维护、Parquet+ZSTD 冷归档、冷热统一查询和生命周期清理。
+- Kubernetes 三副本、PDB、HPA、跨区调度、Canary 和本地双副本部署基线。
+- 3000/9000 条每秒、1000 WebSocket、重连风暴、热点会话和 24 小时长稳压测工具。
+- Outbox 积压/延迟指标、SLO 告警、故障演练和分级灰度发布流程。
 
 ## 本地构建
 
@@ -139,9 +142,9 @@ mvn spring-boot:run
 
 发送接口为 `POST /api/v1/messages`，需要携带登录接口签发的 `Authorization: Bearer <accessToken>`。请求中的 `clientMsgId` 必须是 UUIDv7，服务端会拒绝早于 24 小时或超前超过 5 分钟的值。认证与好友接口见 [第二阶段文档](docs/STAGE2_API.md)，会话与群组接口见 [第三阶段文档](docs/STAGE3_API.md)，历史消息和附件接口见 [第四阶段文档](docs/STAGE4_API.md)，实时连接协议见 [第五阶段文档](docs/STAGE5_WEBSOCKET_GATEWAY.md)，实时投递与同步见 [第六阶段文档](docs/STAGE6_REALTIME_DELIVERY.md)，联系人页面见 [第八阶段文档](docs/STAGE8_CONTACTS.md)，动态路由和在线迁移见 [第十阶段文档](docs/STAGE10_ROUTING_MIGRATION.md)，归档与生命周期见 [第十一阶段文档](docs/STAGE11_ARCHIVE_LIFECYCLE.md)。
 
-## 当前边界与下一阶段
+## 当前边界与生产验收
 
-当前已完成可靠消息写入、用户认证、好友关系、会话与成员权限、历史消息、附件、消息撤回、Netty WebSocket 网关、Redis 在线租约、RocketMQ 实时投递、跨网关 Dispatch、离线同步、已读回执、实时目录通知、完整 React Web 客户端、动态路由与在线迁移，以及 Parquet 冷归档和数据生命周期管理。Web 使用与启动方式见 [第七阶段文档](docs/STAGE7_WEB_CLIENT.md)，产品闭环与撤回见 [第九阶段文档](docs/STAGE9_PRODUCT_COMPLETION.md)，归档运维见 [第十一阶段文档](docs/STAGE11_ARCHIVE_LIFECYCLE.md)。下一阶段是高可用、压测与灰度上线。
+当前已完成可靠消息写入、用户认证、好友关系、会话与成员权限、历史消息、附件、消息撤回、Netty WebSocket 网关、Redis 在线租约、RocketMQ 实时投递、跨网关 Dispatch、离线同步、已读回执、实时目录通知、完整 React Web 客户端、动态路由与在线迁移、Parquet 冷归档和数据生命周期，以及高可用部署和压测工程。Web 使用见 [第七阶段文档](docs/STAGE7_WEB_CLIENT.md)，产品闭环见 [第九阶段文档](docs/STAGE9_PRODUCT_COMPLETION.md)，归档运维见 [第十一阶段文档](docs/STAGE11_ARCHIVE_LIFECYCLE.md)，生产验收见 [第十二阶段文档](docs/STAGE12_HIGH_AVAILABILITY_AND_LOAD.md)。3000/9000 条每秒、24 小时长稳和 1,620 万积压属于环境容量验收，必须在独立且与生产同规格的测试环境执行后才能作为容量结论。
 
 
 

@@ -1,0 +1,52 @@
+{
+  "info": {
+    "name": "IM Stage 12 Performance",
+    "description": "Message write workload for local wiring checks and VU-based latency gates. Use k6 for fixed 3000/9000 requests per second acceptance.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Send message",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "exec": [
+              "const now = Date.now().toString(16).padStart(12, '0');",
+              "const random = Array.from({length: 19}, () => Math.floor(Math.random()*16).toString(16)).join('');",
+              "const variant = (8 + Math.floor(Math.random()*4)).toString(16);",
+              "const hex = `${now}7${random.slice(0,3)}${variant}${random.slice(4,19)}`;",
+              "pm.variables.set('clientMsgId', `${hex.slice(0,8)}-${hex.slice(8,12)}-${hex.slice(12,16)}-${hex.slice(16,20)}-${hex.slice(20)}`);"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('message committed', () => pm.response.to.have.status(201));",
+              "pm.test('response contains sequence', () => pm.expect(Number(pm.response.json().seq)).to.be.above(0));"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Authorization", "value": "Bearer {{accessToken}}", "type": "text" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"conversationId\": \"{{conversationId}}\",\n  \"clientMsgId\": \"{{clientMsgId}}\",\n  \"type\": \"TEXT\",\n  \"content\": {\"text\": \"postman-stage12\"},\n  \"attachmentIds\": []\n}"
+        },
+        "url": "{{baseUrl}}/api/v1/messages"
+      }
+    }
+  ],
+  "variable": [
+    { "key": "baseUrl", "value": "http://127.0.0.1:18080" },
+    { "key": "accessToken", "value": "" },
+    { "key": "conversationId", "value": "" }
+  ]
+}

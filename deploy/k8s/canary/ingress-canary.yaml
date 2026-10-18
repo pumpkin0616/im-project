@@ -1,0 +1,25 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: im-canary
+  annotations:
+    nginx.ingress.kubernetes.io/canary: "true"
+    nginx.ingress.kubernetes.io/canary-by-header: X-IM-Canary
+    nginx.ingress.kubernetes.io/canary-by-header-value: always
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "90"
+    nginx.ingress.kubernetes.io/proxy-body-size: 30m
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts: [im.example.com]
+      secretName: im-tls
+  rules:
+    - host: im.example.com
+      http:
+        paths:
+          - path: /ws
+            pathType: Prefix
+            backend: { service: { name: app-canary, port: { name: websocket } } }
+          - path: /api
+            pathType: Prefix
+            backend: { service: { name: app-canary, port: { name: http } } }

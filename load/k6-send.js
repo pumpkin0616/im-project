@@ -1,66 +1,57 @@
 import http from 'k6/http';
 import { check } from 'k6';
 import exec from 'k6/execution';
+import { Counter } from 'k6/metrics';
 
-const baseUrl = __ENV.BASE_URL || 'http://127.0.0.1:8080';
-const accessToken = __ENV.ACCESS_TOKEN;
+const baseUrl = __ENV.BASE_URL || 'http://127.0.0.1:18080';
+const fallbackToken = __ENV.ACCESS_TOKEN;
 const identities = JSON.parse(__ENV.IM_IDENTITIES || '[]');
+const profile = __ENV.PROFILE || 'acceptance';
+const committed = new Counter('im_messages_committed');
 
-if (identities.length === 0) {
-  throw new Error('IM_IDENTITIES must be a JSON array of {conversationId,userId}');
+if (identities.length === 0) throw new Error('IM_IDENTITIES must contain {conversationId, accessToken?} records');
+if (!fallbackToken && identities.some((identity) => !identity.accessToken)) {
+  throw new Error('set ACCESS_TOKEN or accessToken on every identity');
 }
 
-export const options = {
-  scenarios: {
-    normal: {
-      executor: 'constant-arrival-rate',
-      rate: Number(__ENV.NORMAL_RATE || 3000),
-      timeUnit: '1s',
-      duration: __ENV.NORMAL_DURATION || '10m',
-      preAllocatedVUs: Number(__ENV.NORMAL_VUS || 500),
-      maxVUs: Number(__ENV.MAX_VUS || 3000),
-      gracefulStop: '30s',
-    },
-    peak: {
-      executor: 'constant-arrival-rate',
-      startTime: __ENV.NORMAL_DURATION || '10m',
-      rate: Number(__ENV.PEAK_RATE || 9000),
-      timeUnit: '1s',
-      duration: __ENV.PEAK_DURATION || '15m',
-      preAllocatedVUs: Number(__ENV.PEAK_VUS || 1500),
-      maxVUs: Number(__ENV.MAX_VUS || 3000),
-      gracefulStop: '30s',
-    },
+const profiles = {
+  smoke: { smoke: arrival('smoke', Number(__ENV.SMOKE_RATE || 50), __ENV.SMOKE_DURATION || '30s', Number(__ENV.SMOKE_VUS || 20), 0) },
+  normal: { normal: arrival('normal', Number(__ENV.NORMAL_RATE || 3000), __ENV.NORMAL_DURATION || '10m', Number(__ENV.NORMAL_VUS || 500), 0) },
+  peak: { peak: arrival('peak', Number(__ENV.PEAK_RATE || 9000), __ENV.PEAK_DURATION || '15m', Number(__ENV.PEAK_VUS || 1500), 0) },
+  acceptance: {
+    normal: arrival('normal', Number(__ENV.NORMAL_RATE || 3000), __ENV.NORMAL_DURATION || '10m', Number(__ENV.NORMAL_VUS || 500), 0),
+    peak: arrival('peak', Number(__ENV.PEAK_RATE || 9000), __ENV.PEAK_DURATION || '15m', Number(__ENV.PEAK_VUS || 1500), __ENV.NORMAL_DURATION || '10m'),
   },
+  soak: { soak: arrival('soak', Number(__ENV.SOAK_RATE || 3000), __ENV.SOAK_DURATION || '24h', Number(__ENV.SOAK_VUS || 750), 0) },
+};
+if (!profiles[profile]) throw new Error(`unknown PROFILE: ${profile}`);
+
+export const options = {
+  scenarios: profiles[profile],
   thresholds: {
-    'http_req_failed{scenario:normal}': ['rate<0.001'],
-    'http_req_duration{scenario:normal}': ['p(95)<200', 'p(99)<500'],
-    'http_req_failed{scenario:peak}': ['rate<0.001'],
-    'http_req_duration{scenario:peak}': ['p(99)<1000'],
-    dropped_iterations: ['count==0'],
+    http_req_failed: ['rate<0.001'], checks: ['rate>0.999'],
+    http_req_duration: ['p(95)<200', 'p(99)<1000'], dropped_iterations: ['count==0'],
   },
   discardResponseBodies: true,
+  summaryTrendStats: ['avg', 'min', 'med', 'p(90)', 'p(95)', 'p(99)', 'max'],
 };
 
 export default function () {
   const identity = identities[exec.scenario.iterationInTest % identities.length];
-  const body = JSON.stringify({
-    conversationId: identity.conversationId,
-    clientMsgId: uuidV7(),
-    type: 'TEXT',
-    content: {
-      text: `load-${exec.scenario.name}-${exec.scenario.iterationInTest}`,
-    },
-    attachmentIds: [],
+  const response = http.post(`${baseUrl}/api/v1/messages`, JSON.stringify({
+    conversationId: identity.conversationId, clientMsgId: uuidV7(), type: 'TEXT',
+    content: { text: `load-${exec.scenario.name}-${exec.scenario.iterationInTest}` }, attachmentIds: [],
+  }), {
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${identity.accessToken || fallbackToken}` },
+    tags: { operation: 'send-message' }, timeout: __ENV.REQUEST_TIMEOUT || '5s',
   });
-  const response = http.post(`${baseUrl}/api/v1/messages`, body, {
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${accessToken}`,
-    },
-    tags: { operation: 'send-message' },
-  });
-  check(response, { 'message committed': (result) => result.status === 201 });
+  if (check(response, { 'message committed': (result) => result.status === 201 })) committed.add(1);
+}
+
+function arrival(name, rate, duration, vus, startTime) {
+  return { executor: 'constant-arrival-rate', rate, timeUnit: '1s', duration,
+    preAllocatedVUs: vus, maxVUs: Number(__ENV.MAX_VUS || 5000), gracefulStop: '30s', startTime,
+    tags: { load_profile: name } };
 }
 
 function uuidV7() {
@@ -71,6 +62,4 @@ function uuidV7() {
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 }
 
-function randomHex() {
-  return Math.floor(Math.random() * 16).toString(16);
-}
+function randomHex() { return Math.floor(Math.random() * 16).toString(16); }

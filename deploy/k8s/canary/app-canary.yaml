@@ -1,0 +1,49 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: im-app-canary
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app.kubernetes.io/name: im-app, app.kubernetes.io/track: canary }
+  template:
+    metadata:
+      labels: { app.kubernetes.io/name: im-app, app.kubernetes.io/track: canary }
+    spec:
+      terminationGracePeriodSeconds: 60
+      containers:
+        - name: app
+          image: ghcr.io/example/im-app-canary:replace-with-canary-immutable-tag
+          ports:
+            - { name: http, containerPort: 8080 }
+            - { name: websocket, containerPort: 18081 }
+          envFrom:
+            - configMapRef: { name: im-config }
+            - secretRef: { name: im-secrets }
+          env:
+            - name: POD_NAME
+              valueFrom: { fieldRef: { fieldPath: metadata.name } }
+            - name: POD_IP
+              valueFrom: { fieldRef: { fieldPath: status.podIP } }
+            - { name: IM_GATEWAY_ID, value: "$(POD_NAME)" }
+            - { name: IM_GATEWAY_DISPATCH_URL, value: "http://$(POD_IP):8080/internal/v1/gateway/dispatch" }
+            - { name: JAVA_TOOL_OPTIONS, value: "-XX:MaxRAMPercentage=75 -XX:+UseG1GC -XX:MaxGCPauseMillis=100 -XX:+ExitOnOutOfMemoryError" }
+          startupProbe:
+            httpGet: { path: /actuator/health/liveness, port: http }
+            periodSeconds: 5
+            failureThreshold: 30
+          readinessProbe:
+            httpGet: { path: /actuator/health/readiness, port: http }
+          livenessProbe:
+            httpGet: { path: /actuator/health/liveness, port: http }
+            periodSeconds: 10
+          lifecycle:
+            preStop: { exec: { command: ["sh", "-c", "sleep 10"] } }
+          resources:
+            requests: { cpu: "2", memory: 3Gi }
+            limits: { cpu: "4", memory: 5Gi }
+          volumeMounts:
+            - { name: shared-data, mountPath: /data }
+      volumes:
+        - name: shared-data
+          persistentVolumeClaim: { claimName: im-shared-data }

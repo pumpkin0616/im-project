@@ -1,0 +1,12 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: im
+resources:
+  - ../base
+  - app-canary.yaml
+  - service-canary.yaml
+  - ingress-canary.yaml
+images:
+  - name: ghcr.io/example/im-app-canary
+    newName: ghcr.io/example/im-app
+    newTag: replace-with-canary-immutable-tag
