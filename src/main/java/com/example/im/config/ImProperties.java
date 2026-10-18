@@ -15,7 +15,8 @@ public record ImProperties(
         Auth auth,
         Storage storage,
         Gateway gateway,
-        Online online
+        Online online,
+        Archive archive
 ) {
     public record Routing(
             int slotCount, int tableGroupCount, long hashSeed, String localShardId,
@@ -56,6 +57,25 @@ public record ImProperties(
             if (url == null || url.isBlank()) throw new IllegalArgumentException("migration shard url is required");
             if (username == null || username.isBlank()) throw new IllegalArgumentException("migration shard username is required");
             if (maximumPoolSize <= 0) maximumPoolSize = 4;
+        }
+    }
+
+    public record Archive(
+            boolean enabled, Path root, Duration hotRetention, Duration outboxRetention,
+            Duration attachmentRetention, Duration failedUploadRetention,
+            int batchSize, int partitionAheadDays, String adminSecret
+    ) {
+        public Archive {
+            if (root == null) root = Path.of("./data/archive");
+            if (hotRetention == null) hotRetention = Duration.ofDays(7);
+            if (outboxRetention == null) outboxRetention = Duration.ofDays(7);
+            if (attachmentRetention == null) attachmentRetention = Duration.ofDays(180);
+            if (failedUploadRetention == null) failedUploadRetention = Duration.ofDays(1);
+            if (batchSize <= 0 || batchSize > 10_000) batchSize = 1000;
+            if (partitionAheadDays <= 0 || partitionAheadDays > 90) partitionAheadDays = 14;
+            if (adminSecret == null || adminSecret.getBytes(java.nio.charset.StandardCharsets.UTF_8).length < 16) {
+                throw new IllegalArgumentException("archive adminSecret must contain at least 16 bytes");
+            }
         }
     }
 

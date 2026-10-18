@@ -162,16 +162,20 @@ CREATE TABLE archive_batches_00 (
     slot_id         SMALLINT UNSIGNED NOT NULL,
     message_day     DATE NOT NULL,
     generation      INT UNSIGNED NOT NULL,
-    state           TINYINT UNSIGNED NOT NULL COMMENT '1 preparing, 2 uploaded, 3 verified, 4 published, 5 hot dropped',
+    state           TINYINT UNSIGNED NOT NULL COMMENT '1 preparing, 2 uploaded, 3 verified, 4 published, 5 hot dropped, 6 failed',
     row_count       BIGINT UNSIGNED NOT NULL DEFAULT 0,
     manifest_key    VARCHAR(512) CHARACTER SET ascii NULL,
     manifest_sha256 BINARY(32) NULL,
+    attempt_count   INT UNSIGNED NOT NULL DEFAULT 0,
+    last_error      TEXT NULL,
     created_at      DATETIME(3) NOT NULL,
+    updated_at      DATETIME(3) NOT NULL,
+    verified_at     DATETIME(3) NULL,
     published_at    DATETIME(3) NULL,
     PRIMARY KEY (id),
     UNIQUE KEY uk_archive_batches (slot_id, message_day, generation),
     KEY idx_archive_batches_state (state, message_day),
-    CONSTRAINT ck_archive_batches_state CHECK (state IN (1, 2, 3, 4, 5))
+    CONSTRAINT ck_archive_batches_state CHECK (state IN (1, 2, 3, 4, 5, 6))
 ) ENGINE=InnoDB;
 
 CREATE TABLE archive_segments_00 (
@@ -181,12 +185,26 @@ CREATE TABLE archive_segments_00 (
     slot_id         SMALLINT UNSIGNED NOT NULL,
     batch_id        BINARY(16) NOT NULL,
     object_key      VARCHAR(512) CHARACTER SET ascii NOT NULL,
+    object_sha256   BINARY(32) NOT NULL,
+    byte_size       BIGINT UNSIGNED NOT NULL,
     row_group_no    INT UNSIGNED NOT NULL,
     row_count       INT UNSIGNED NOT NULL,
     PRIMARY KEY (conversation_id, min_seq, batch_id),
     KEY idx_archive_segments_batch (batch_id),
     KEY idx_archive_segments_slot (slot_id, conversation_id, min_seq),
     CONSTRAINT ck_archive_segments_range CHECK (max_seq >= min_seq)
+) ENGINE=InnoDB;
+
+CREATE TABLE lifecycle_runs (
+    id              BINARY(16) NOT NULL,
+    run_type        VARCHAR(32) CHARACTER SET ascii NOT NULL,
+    state           VARCHAR(16) CHARACTER SET ascii NOT NULL,
+    details         JSON NOT NULL,
+    last_error      TEXT NULL,
+    started_at      DATETIME(3) NOT NULL,
+    completed_at    DATETIME(3) NULL,
+    PRIMARY KEY (id),
+    KEY idx_lifecycle_runs_state (run_type, state, started_at)
 ) ENGINE=InnoDB;
 
 -- Clone this table per six-hour generation, for example send_dedup_00_g000001.
@@ -258,9 +276,21 @@ CREATE TABLE archive_segments_07 LIKE archive_segments_00;
 -- Provision the rolling six-hour idempotency windows before application traffic reaches a shard.
 DELIMITER $$
 CREATE PROCEDURE provision_dedup_generation(IN p_generation BIGINT UNSIGNED)
+SQL SECURITY DEFINER
 BEGIN
     DECLARE v_group INT DEFAULT 0;
     DECLARE v_sql TEXT;
+    DECLARE v_lock_acquired INT DEFAULT 0;
+    DECLARE EXIT HANDLER FOR SQLEXCEPTION
+    BEGIN
+        IF v_lock_acquired = 1 THEN DO RELEASE_LOCK('im_dedup_generation_provision'); END IF;
+        RESIGNAL;
+    END;
+
+    SELECT GET_LOCK('im_dedup_generation_provision', 5) INTO v_lock_acquired;
+    IF v_lock_acquired <> 1 THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='dedup generation provisioning is already running';
+    END IF;
 
     WHILE v_group < 8 DO
         SET v_sql = CONCAT(
@@ -285,6 +315,8 @@ BEGIN
     ON DUPLICATE KEY UPDATE
         accept_until = VALUES(accept_until),
         drop_after = VALUES(drop_after);
+
+    DO RELEASE_LOCK('im_dedup_generation_provision');
 END$$
 DELIMITER ;
 

@@ -33,6 +33,7 @@
 - 1,024 槽控制面动态路由、版本感知缓存和会话级热点路由。
 - 槽位/单会话在线迁移、epoch 写栅栏、迁移校验与源数据封存。
 - Flyway V10、路由健康检查、Prometheus 指标和受密钥保护的运维接口。
+- MySQL 日分区维护、Parquet+ZSTD 冷归档、冷热统一查询和生命周期清理。
 
 ## 本地构建
 
@@ -66,6 +67,10 @@ mvn package
 | `IM_ROUTING_ADMIN_SECRET` | 本地开发值 | 路由管理接口密钥，生产必须替换 |
 | `IM_FLYWAY_ENABLED` | `false` | 发布期间启用 Flyway；需同时提供独立 DDL 账号 |
 | `SPRING_FLYWAY_USER` / `SPRING_FLYWAY_PASSWORD` | 无 | Flyway DDL 账号，不能复用 `im_app` |
+| `IM_ARCHIVE_ENABLED` | `false` | 启用自动归档、分区维护和生命周期清理 |
+| `IM_ARCHIVE_HOT_RETENTION` | `7d` | MySQL 热消息保留时间 |
+| `IM_ARCHIVE_ROOT` | `./data/archive` | Parquet 冷归档根目录 |
+| `IM_LIFECYCLE_ADMIN_SECRET` | 本地开发值 | 生命周期管理密钥，生产必须替换 |
 
 ## 初始化数据库
 
@@ -132,11 +137,11 @@ IM_DB_URL='jdbc:mysql://127.0.0.1:3307/im_message?useUnicode=true&characterEncod
 mvn spring-boot:run
 ```
 
-发送接口为 `POST /api/v1/messages`，需要携带登录接口签发的 `Authorization: Bearer <accessToken>`。请求中的 `clientMsgId` 必须是 UUIDv7，服务端会拒绝早于 24 小时或超前超过 5 分钟的值。认证与好友接口见 [第二阶段文档](docs/STAGE2_API.md)，会话与群组接口见 [第三阶段文档](docs/STAGE3_API.md)，历史消息和附件接口见 [第四阶段文档](docs/STAGE4_API.md)，实时连接协议见 [第五阶段文档](docs/STAGE5_WEBSOCKET_GATEWAY.md)，实时投递与同步见 [第六阶段文档](docs/STAGE6_REALTIME_DELIVERY.md)，联系人页面见 [第八阶段文档](docs/STAGE8_CONTACTS.md)，动态路由和在线迁移见 [第十阶段文档](docs/STAGE10_ROUTING_MIGRATION.md)。
+发送接口为 `POST /api/v1/messages`，需要携带登录接口签发的 `Authorization: Bearer <accessToken>`。请求中的 `clientMsgId` 必须是 UUIDv7，服务端会拒绝早于 24 小时或超前超过 5 分钟的值。认证与好友接口见 [第二阶段文档](docs/STAGE2_API.md)，会话与群组接口见 [第三阶段文档](docs/STAGE3_API.md)，历史消息和附件接口见 [第四阶段文档](docs/STAGE4_API.md)，实时连接协议见 [第五阶段文档](docs/STAGE5_WEBSOCKET_GATEWAY.md)，实时投递与同步见 [第六阶段文档](docs/STAGE6_REALTIME_DELIVERY.md)，联系人页面见 [第八阶段文档](docs/STAGE8_CONTACTS.md)，动态路由和在线迁移见 [第十阶段文档](docs/STAGE10_ROUTING_MIGRATION.md)，归档与生命周期见 [第十一阶段文档](docs/STAGE11_ARCHIVE_LIFECYCLE.md)。
 
 ## 当前边界与下一阶段
 
-当前已完成可靠消息写入、用户认证、好友关系、会话与成员权限、历史消息、附件、消息撤回、Netty WebSocket 网关、Redis 在线租约、RocketMQ 实时投递、跨网关 Dispatch、离线同步、已读回执、实时目录通知、完整 React Web 客户端，以及第十阶段的动态路由和在线迁移。Web 使用与启动方式见 [第七阶段文档](docs/STAGE7_WEB_CLIENT.md)，联系人功能见 [第八阶段文档](docs/STAGE8_CONTACTS.md)，产品闭环与撤回见 [第九阶段文档](docs/STAGE9_PRODUCT_COMPLETION.md)。下一阶段是历史归档与数据生命周期管理。
+当前已完成可靠消息写入、用户认证、好友关系、会话与成员权限、历史消息、附件、消息撤回、Netty WebSocket 网关、Redis 在线租约、RocketMQ 实时投递、跨网关 Dispatch、离线同步、已读回执、实时目录通知、完整 React Web 客户端、动态路由与在线迁移，以及 Parquet 冷归档和数据生命周期管理。Web 使用与启动方式见 [第七阶段文档](docs/STAGE7_WEB_CLIENT.md)，产品闭环与撤回见 [第九阶段文档](docs/STAGE9_PRODUCT_COMPLETION.md)，归档运维见 [第十一阶段文档](docs/STAGE11_ARCHIVE_LIFECYCLE.md)。下一阶段是高可用、压测与灰度上线。
 
 
 

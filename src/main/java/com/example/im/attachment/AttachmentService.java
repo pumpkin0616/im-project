@@ -4,6 +4,7 @@ import com.example.im.attachment.AttachmentDtos.AttachmentView;
 import com.example.im.attachment.AttachmentDtos.CreateAttachmentRequest;
 import com.example.im.attachment.AttachmentDtos.UploadTicket;
 import com.example.im.common.ApiBusinessException;
+import com.example.im.archive.ArchiveReader;
 import com.example.im.config.ImProperties;
 import com.example.im.message.infrastructure.UuidV7Generator;
 import com.example.im.routing.ConversationRouteResolver;
@@ -40,10 +41,11 @@ final class AttachmentService {
     private final long maximumBytes;
     private final java.time.Duration uploadTtl;
     private final RouteWriteGuard routeWriteGuard;
+    private final ArchiveReader archive;
 
     AttachmentService(JdbcTemplate jdbc, TransactionTemplate transactions,
                       ConversationRouteResolver routes, UuidV7Generator ids,
-                      ImProperties properties, RouteWriteGuard routeWriteGuard) {
+                      ImProperties properties, RouteWriteGuard routeWriteGuard, ArchiveReader archive) {
         this.jdbc = jdbc;
         this.transactions = transactions;
         this.routes = routes;
@@ -53,6 +55,7 @@ final class AttachmentService {
         this.maximumBytes = properties.storage().maxAttachmentBytes();
         this.uploadTtl = properties.storage().uploadTtl();
         this.routeWriteGuard = routeWriteGuard;
+        this.archive = archive;
     }
 
     UploadTicket create(UUID userId, UUID conversationId, CreateAttachmentRequest request) {
@@ -185,6 +188,10 @@ final class AttachmentService {
                             + " WHERE conversation_id=? AND seq=? AND status=2", Integer.class,
                     bytes(conversationId), value.boundSeq());
             if (recalled != null && recalled > 0) {
+                throw error("ATTACHMENT_NOT_FOUND", "Attachment does not exist", 404);
+            }
+            if ((recalled == null || recalled == 0)
+                    && archive.recalled(table.route().tableGroup(), conversationId, value.boundSeq())) {
                 throw error("ATTACHMENT_NOT_FOUND", "Attachment does not exist", 404);
             }
         }

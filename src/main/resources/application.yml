@@ -81,6 +81,16 @@ im:
     root: ${IM_STORAGE_ROOT:./data/attachments}
     max-attachment-bytes: ${IM_MAX_ATTACHMENT_BYTES:26214400}
     upload-ttl: ${IM_UPLOAD_TTL:1h}
+  archive:
+    enabled: ${IM_ARCHIVE_ENABLED:false}
+    root: ${IM_ARCHIVE_ROOT:./data/archive}
+    hot-retention: ${IM_ARCHIVE_HOT_RETENTION:7d}
+    outbox-retention: ${IM_OUTBOX_RETENTION:7d}
+    attachment-retention: ${IM_ATTACHMENT_RETENTION:180d}
+    failed-upload-retention: ${IM_FAILED_UPLOAD_RETENTION:1d}
+    batch-size: ${IM_LIFECYCLE_BATCH_SIZE:1000}
+    partition-ahead-days: ${IM_PARTITION_AHEAD_DAYS:14}
+    admin-secret: ${IM_LIFECYCLE_ADMIN_SECRET:local-lifecycle-secret-change-me}
   auth:
     issuer: ${IM_AUTH_ISSUER:im-local}
     jwt-secret: ${IM_AUTH_JWT_SECRET:local-development-secret-change-me-32-bytes}

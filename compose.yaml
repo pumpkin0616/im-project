@@ -32,12 +32,13 @@ services:
       - mysql-data:/var/lib/mysql
       - ./sql/001_control_schema.sql:/docker-entrypoint-initdb.d/001_control_schema.sql:ro
       - ./sql/002_message_shard_schema.sql:/docker-entrypoint-initdb.d/002_message_shard_schema.sql:ro
-      - ./infra/mysql/003_local_access.sql:/docker-entrypoint-initdb.d/003_local_access.sql:ro
+      - ./infra/mysql/003_local_access.sql:/docker-entrypoint-initdb.d/099_local_access.sql:ro
       - ./sql/011_stage3_conversation_schema.sql:/docker-entrypoint-initdb.d/004_stage3_conversation_schema.sql:ro
       - ./sql/012_stage4_history_attachment_schema.sql:/docker-entrypoint-initdb.d/005_stage4_history_attachment_schema.sql:ro
       - ./sql/013_stage5_gateway_schema.sql:/docker-entrypoint-initdb.d/006_stage5_gateway_schema.sql:ro
       - ./sql/014_stage9_product_completion_schema.sql:/docker-entrypoint-initdb.d/007_stage9_product_completion_schema.sql:ro
       - ./sql/015_stage10_routing_migration_schema.sql:/docker-entrypoint-initdb.d/008_stage10_routing_migration_schema.sql:ro
+      - ./sql/016_stage11_lifecycle_schema.sql:/docker-entrypoint-initdb.d/009_stage11_lifecycle_schema.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p$$MYSQL_ROOT_PASSWORD --silent"]
       interval: 3s
@@ -142,6 +143,8 @@ services:
       IM_GATEWAY_DISPATCH_URL: http://app:8080/internal/v1/gateway/dispatch
       IM_GATEWAY_DISPATCH_SECRET: local-dispatch-secret-change-me
       IM_STORAGE_ROOT: /app/data/attachments
+      IM_ARCHIVE_ROOT: /app/data/archive
+      IM_LIFECYCLE_ADMIN_SECRET: local-lifecycle-secret-change-me
       IM_GATEWAY_PORT: 18081
       IM_GATEWAY_PUBLIC_URL: ws://127.0.0.1:18081/ws
       IM_GATEWAY_ALLOWED_ORIGINS: http://localhost:3000,http://127.0.0.1:3000
@@ -150,6 +153,7 @@ services:
       - "18081:18081"
     volumes:
       - attachment-data:/app/data/attachments
+      - archive-data:/app/data/archive
     depends_on:
       mysql:
         condition: service_healthy
@@ -188,3 +192,4 @@ volumes:
   mysql-data:
   rocketmq-store:
   attachment-data:
+  archive-data:

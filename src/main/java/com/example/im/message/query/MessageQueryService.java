@@ -1,6 +1,8 @@
 package com.example.im.message.query;
 
 import com.example.im.common.ApiBusinessException;
+import com.example.im.archive.ArchiveMessage;
+import com.example.im.archive.ArchiveReader;
 import com.example.im.config.ImProperties;
 import com.example.im.message.query.MessageQueryDtos.AttachmentView;
 import com.example.im.message.query.MessageQueryDtos.MessagePage;
@@ -22,6 +24,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.Comparator;
+import java.util.TreeMap;
 
 @Service
 final class MessageQueryService {
@@ -29,13 +33,15 @@ final class MessageQueryService {
     private final ConversationRouteResolver routes;
     private final ObjectMapper objectMapper;
     private final String localShard;
+    private final ArchiveReader archive;
 
     MessageQueryService(JdbcTemplate jdbc, ConversationRouteResolver routes,
-                        ObjectMapper objectMapper, ImProperties properties) {
+                        ObjectMapper objectMapper, ImProperties properties, ArchiveReader archive) {
         this.jdbc = jdbc;
         this.routes = routes;
         this.objectMapper = objectMapper;
         this.localShard = properties.routing().localShardId();
+        this.archive = archive;
     }
 
     public MessagePage list(UUID userId, UUID conversationId, Long beforeSeq, Long afterSeq, int limit) {
@@ -65,6 +71,18 @@ final class MessageQueryService {
                 bytes(conversationId), cursor, visibility.visibleFromSeq(),
                 visibility.highWatermark(), limit + 1);
 
+        long minimum = visibility.visibleFromSeq();
+        long maximum = visibility.highWatermark();
+        if (forward) minimum = Math.max(minimum, cursor + 1);
+        else maximum = Math.min(maximum, cursor - 1);
+        List<MessageView> cold = archive.list(tables.tableGroup(), conversationId, minimum, maximum,
+                        forward, limit + 1).stream().map(this::view).toList();
+        Map<Long, MessageView> merged = new TreeMap<>();
+        cold.forEach(message -> merged.put(message.seq(), message));
+        rows.forEach(message -> merged.put(message.seq(), message));
+        Comparator<MessageView> sequenceOrder = Comparator.comparingLong(MessageView::seq);
+        if (!forward) sequenceOrder = sequenceOrder.reversed();
+        rows = new ArrayList<>(merged.values().stream().sorted(sequenceOrder).limit(limit + 1L).toList());
         boolean hasMore = rows.size() > limit;
         if (hasMore) rows = new ArrayList<>(rows.subList(0, limit));
         if (!forward) Collections.reverse(rows);
@@ -93,6 +111,9 @@ final class MessageQueryService {
                         rs.getTimestamp("created_at").toInstant(), uuid(rs.getBytes("recalled_by")),
                         instant(rs.getTimestamp("recalled_at")), List.of()),
                 bytes(conversationId), seq);
+        if (values.isEmpty()) {
+            values = archive.find(tables.tableGroup(), conversationId, seq).map(this::view).stream().toList();
+        }
         if (values.isEmpty()) throw error("MESSAGE_NOT_FOUND", "Message does not exist", 404);
         return attach(tables.attachments(), conversationId, values).getFirst();
     }
@@ -148,7 +169,7 @@ final class MessageQueryService {
             throw error("ROUTE_MISMATCH", "Conversation belongs to " + route.shardId(), 503);
         }
         MessageTableNames names = new MessageTableNames(route.tableGroup(), 0);
-        return new Tables(names.conversations(), names.members(), names.messages(), names.attachments());
+        return new Tables(route.tableGroup(), names.conversations(), names.members(), names.messages(), names.attachments());
     }
 
     private JsonNode json(String value) {
@@ -163,6 +184,12 @@ final class MessageQueryService {
         return status == 2 ? objectMapper.createObjectNode() : json(value);
     }
 
+    private MessageView view(ArchiveMessage message) {
+        return new MessageView(message.messageId(), message.seq(), message.senderId(), message.clientMsgId(),
+                typeName(message.type()), statusName(message.status()), publicContent(message.status(), message.content()),
+                message.createdAt(), message.recalledBy(), message.recalledAt(), List.of());
+    }
+
     private String typeName(int type) {
         return switch (type) { case 1 -> "TEXT"; case 2 -> "IMAGE"; case 3 -> "FILE"; default -> "UNKNOWN"; };
     }
@@ -175,6 +202,6 @@ final class MessageQueryService {
     private ApiBusinessException error(String code, String message, int status) {
         return new ApiBusinessException(code, message, status);
     }
-    private record Tables(String conversations, String members, String messages, String attachments) {}
+    private record Tables(int tableGroup, String conversations, String members, String messages, String attachments) {}
     private record Visibility(long highWatermark, long minAvailableSeq, long visibleFromSeq) {}
 }

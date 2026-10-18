@@ -1,0 +1,26 @@
+groups:
+  - name: im-lifecycle
+    rules:
+      - alert: ImArchiveFailed
+        expr: increase(im_lifecycle_archives_total{result="failed"}[10m]) > 0
+        labels: { severity: critical }
+        annotations: { summary: "An IM archive batch failed" }
+      - alert: ImArchiveBacklogGrowing
+        expr: deriv(im_lifecycle_archive_backlog[30m]) > 0
+        for: 30m
+        labels: { severity: warning }
+        annotations: { summary: "IM cold archive backlog is growing" }
+      - alert: ImLifecycleCleanupFailed
+        expr: increase(im_lifecycle_cleanup_total{result="failed"}[1h]) > 0
+        labels: { severity: warning }
+        annotations: { summary: "IM lifecycle cleanup failed" }
+      - alert: ImArchiveFailedBatchPresent
+        expr: im_lifecycle_archive_failed_batches > 0
+        for: 5m
+        labels: { severity: critical }
+        annotations: { summary: "An unpublished IM archive batch requires attention" }
+      - alert: ImArchiveBatchStuck
+        expr: im_lifecycle_archive_oldest_active_seconds > 21600
+        for: 5m
+        labels: { severity: critical }
+        annotations: { summary: "An IM archive batch has not progressed for six hours" }

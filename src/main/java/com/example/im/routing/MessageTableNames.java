@@ -30,6 +30,10 @@ public record MessageTableNames(int tableGroup, long dedupGeneration) {
         return "outbox_" + groupSuffix();
     }
 
+    public String archiveBatches() { return "archive_batches_" + groupSuffix(); }
+
+    public String archiveSegments() { return "archive_segments_" + groupSuffix(); }
+
     public String dedup() {
         return "send_dedup_" + groupSuffix() + "_g" + dedupGeneration;
     }

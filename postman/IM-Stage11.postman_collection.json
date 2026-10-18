@@ -1,0 +1,66 @@
+{
+  "info": {
+    "_postman_id": "01a14af3-a5d7-70a2-9db3-43d7254041ef",
+    "name": "IM Stage 11 - Archive and Lifecycle",
+    "description": "Operations requests for verified Parquet archives, partition provisioning, retention cleanup and lifecycle status.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [{ "key": "lifecycleApi", "value": "http://127.0.0.1:18080" }],
+  "auth": {
+    "type": "apikey",
+    "apikey": [
+      { "key": "key", "value": "X-IM-Lifecycle-Secret", "type": "string" },
+      { "key": "value", "value": "{{lifecycleSecret}}", "type": "string" },
+      { "key": "in", "value": "header", "type": "string" }
+    ]
+  },
+  "item": [
+    {
+      "name": "Lifecycle status",
+      "request": { "method": "GET", "url": "{{lifecycleApi}}/internal/v1/lifecycle/status" },
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+        "pm.test('status succeeds', () => pm.response.to.have.status(200));",
+        "pm.test('backlog is reported', () => pm.expect(pm.response.json()).to.have.property('archiveBacklogScopes'));"
+      ]}}]
+    },
+    {
+      "name": "Archive a closed UTC day",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": "{{lifecycleApi}}/internal/v1/lifecycle/archives",
+        "body": { "mode": "raw", "raw": "{\n  \"tableGroup\": {{archiveTableGroup}},\n  \"slotId\": {{archiveSlotId}},\n  \"messageDay\": \"{{archiveMessageDay}}\"\n}" },
+        "description": "The day must be earlier than the current UTC day and have no pending Outbox events. Published cold data is verified before hot rows are deleted."
+      },
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+        "pm.test('archive completes', () => pm.response.to.have.status(201));",
+        "const batch = pm.response.json();",
+        "pm.test('archive is published and hot rows are removed', () => { pm.expect(batch.state).to.eql('HOT_DROPPED'); pm.expect(batch.manifestSha256).to.have.length(64); });",
+        "pm.environment.set('archiveBatchId', batch.id);"
+      ]}}]
+    },
+    {
+      "name": "Read archive batch",
+      "request": { "method": "GET", "url": "{{lifecycleApi}}/internal/v1/lifecycle/archives/{{archiveTableGroup}}/{{archiveBatchId}}" },
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+        "pm.test('batch is auditable', () => pm.response.to.have.status(200));",
+        "pm.test('batch reached a terminal state', () => pm.expect(pm.response.json().state).to.be.oneOf(['HOT_DROPPED', 'FAILED']));"
+      ]}}]
+    },
+    {
+      "name": "Ensure future message partitions",
+      "request": { "method": "POST", "url": "{{lifecycleApi}}/internal/v1/lifecycle/partitions/ensure" },
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+        "pm.test('partition maintenance succeeds', () => pm.response.to.have.status(204));"
+      ]}}]
+    },
+    {
+      "name": "Run retention cleanup",
+      "request": { "method": "POST", "url": "{{lifecycleApi}}/internal/v1/lifecycle/cleanup" },
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+        "pm.test('cleanup succeeds', () => pm.response.to.have.status(200));",
+        "pm.test('deletion counters are returned', () => pm.expect(pm.response.json().deleted).to.have.keys('outbox', 'dedup', 'attachments', 'staleArchiveBatches'));"
+      ]}}]
+    }
+  ]
+}

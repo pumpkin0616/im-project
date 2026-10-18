@@ -20,6 +20,9 @@
     <properties>
         <java.version>21</java.version>
         <rocketmq-client.version>5.2.2</rocketmq-client.version>
+        <parquet.version>1.16.0</parquet.version>
+        <avro.version>1.12.0</avro.version>
+        <hadoop.version>3.4.1</hadoop.version>
     </properties>
 
     <dependencies>
@@ -73,6 +76,32 @@
             <groupId>org.apache.rocketmq</groupId>
             <artifactId>rocketmq-client-java</artifactId>
             <version>${rocketmq-client.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.parquet</groupId>
+            <artifactId>parquet-avro</artifactId>
+            <version>${parquet.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.avro</groupId>
+            <artifactId>avro</artifactId>
+            <version>${avro.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.hadoop</groupId>
+            <artifactId>hadoop-client-api</artifactId>
+            <version>${hadoop.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.hadoop</groupId>
+            <artifactId>hadoop-client-runtime</artifactId>
+            <version>${hadoop.version}</version>
+            <scope>runtime</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.github.luben</groupId>
+            <artifactId>zstd-jni</artifactId>
+            <version>1.5.7-4</version>
         </dependency>
         <dependency>
             <groupId>io.netty</groupId>

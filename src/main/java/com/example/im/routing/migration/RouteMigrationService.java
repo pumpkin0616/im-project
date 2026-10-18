@@ -215,6 +215,10 @@ final class RouteMigrationService {
         copy(source, target, from.outbox(), to.outbox(), "conversation_id=?", new Object[]{id},
                 columns("event_id,event_type,schema_version,slot_id,conversation_id,message_day,message_seq,payload,status,attempts,available_at,lease_owner,lease_until,created_at,published_at"),
                 columns("event_type,schema_version,slot_id,conversation_id,message_day,message_seq,payload,status,attempts,available_at,lease_owner,lease_until,created_at,published_at"));
+        copyArchiveBatches(source, target, from, to, id);
+        copy(source, target, from.archiveSegments(), to.archiveSegments(), "conversation_id=?", new Object[]{id},
+                columns("conversation_id,min_seq,max_seq,slot_id,batch_id,object_key,object_sha256,byte_size,row_group_no,row_count"),
+                columns("max_seq,slot_id,object_key,object_sha256,byte_size,row_group_no,row_count"));
         copyDedup(source, target, from.tableGroup(), to.tableGroup(), id);
     }
 
@@ -234,6 +238,41 @@ final class RouteMigrationService {
             copy(source, target, sourceTable, targetTable, "conversation_id=?", new Object[]{conversationId},
                     columns("conversation_id,sender_id,client_msg_id,slot_id,request_hash,message_id,seq,message_day,created_at"),
                     columns("slot_id,request_hash,message_id,seq,message_day,created_at"));
+        }
+    }
+
+    private void copyArchiveBatches(JdbcTemplate source, JdbcTemplate target, MessageTableNames from,
+                                    MessageTableNames to, byte[] conversationId) {
+        List<Map<String, Object>> batches = source.queryForList("SELECT * FROM " + from.archiveBatches()
+                + " WHERE id IN (SELECT batch_id FROM " + from.archiveSegments() + " WHERE conversation_id=?)",
+                conversationId);
+        String insert = "INSERT INTO " + to.archiveBatches()
+                + "(id,slot_id,message_day,generation,state,row_count,manifest_key,manifest_sha256,attempt_count,"
+                + "last_error,created_at,updated_at,verified_at,published_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?) "
+                + "ON DUPLICATE KEY UPDATE state=VALUES(state),row_count=VALUES(row_count),"
+                + "manifest_key=VALUES(manifest_key),manifest_sha256=VALUES(manifest_sha256),"
+                + "attempt_count=VALUES(attempt_count),last_error=VALUES(last_error),updated_at=VALUES(updated_at),"
+                + "verified_at=VALUES(verified_at),published_at=VALUES(published_at)";
+        for (Map<String, Object> batch : batches) {
+            byte[] batchId = (byte[]) batch.get("id");
+            int slotId = ((Number) batch.get("slot_id")).intValue();
+            Object day = batch.get("message_day");
+            int generation = ((Number) batch.get("generation")).intValue();
+            Integer idExists = target.queryForObject("SELECT COUNT(*) FROM " + to.archiveBatches() + " WHERE id=?",
+                    Integer.class, batchId);
+            if (idExists == null || idExists == 0) {
+                Integer conflict = target.queryForObject("SELECT COUNT(*) FROM " + to.archiveBatches()
+                        + " WHERE slot_id=? AND message_day=? AND generation=?", Integer.class, slotId, day, generation);
+                if (conflict != null && conflict > 0) {
+                    Integer next = target.queryForObject("SELECT COALESCE(MAX(generation),0)+1 FROM "
+                            + to.archiveBatches() + " WHERE slot_id=? AND message_day=?", Integer.class, slotId, day);
+                    generation = next == null ? generation + 1 : next;
+                }
+            }
+            target.update(insert, batchId, slotId, day, generation, batch.get("state"), batch.get("row_count"),
+                    batch.get("manifest_key"), batch.get("manifest_sha256"), batch.get("attempt_count"),
+                    batch.get("last_error"), batch.get("created_at"), batch.get("updated_at"),
+                    batch.get("verified_at"), batch.get("published_at"));
         }
     }
 
@@ -286,12 +325,13 @@ final class RouteMigrationService {
         JdbcTemplate target = shards.require(migration.targetShard());
         MessageTableNames from = new MessageTableNames(migration.sourceTableGroup(), 0);
         MessageTableNames to = new MessageTableNames(migration.targetTableGroup(), 0);
-        long messages = 0, members = 0, attachments = 0;
+        long messages = 0, members = 0, attachments = 0, archiveSegments = 0;
         for (UUID conversation : conversations) {
             byte[] id = UuidCodec.toBytes(conversation);
             messages += equalCount(source, target, from.messages(), to.messages(), id);
             members += equalCount(source, target, from.members(), to.members(), id);
             attachments += equalCount(source, target, from.attachments(), to.attachments(), id);
+            archiveSegments += equalCount(source, target, from.archiveSegments(), to.archiveSegments(), id);
             Long sourceHigh = source.queryForObject("SELECT last_seq FROM " + from.conversations() + " WHERE id=?", Long.class, id);
             Long targetHigh = target.queryForObject("SELECT last_seq FROM " + to.conversations() + " WHERE id=?", Long.class, id);
             if (!Objects.equals(sourceHigh, targetHigh)) throw error("MIGRATION_VERIFY_FAILED", "Conversation high watermark differs", 409);
@@ -301,6 +341,7 @@ final class RouteMigrationService {
         result.put("messageCount", messages);
         result.put("memberCount", members);
         result.put("attachmentCount", attachments);
+        result.put("archiveSegmentCount", archiveSegments);
         result.put("verifiedAt", Instant.now().toString());
         return result;
     }

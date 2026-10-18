@@ -51,7 +51,7 @@ public class SecurityConfiguration {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/api/v1/auth/register", "/api/v1/auth/login", "/api/v1/auth/refresh",
                                 "/internal/v1/gateway/dispatch", "/actuator/health/**", "/actuator/info", "/actuator/prometheus").permitAll()
-                        .requestMatchers("/internal/v1/routing/**", "/error").permitAll()
+                        .requestMatchers("/internal/v1/routing/**", "/internal/v1/lifecycle/**", "/error").permitAll()
                         .anyRequest().authenticated())
                 .oauth2ResourceServer(resource -> resource.jwt(Customizer.withDefaults()))
                 .build();
