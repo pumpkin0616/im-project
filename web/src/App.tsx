@@ -1,4 +1,4 @@
-import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { FormEvent, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import {
   Ban, Check, CheckCheck, ChevronDown, CircleAlert, ContactRound, Inbox, LoaderCircle, Menu,
   Download, FileText, LogOut, MessageCircle, Paperclip, Pencil, Plus, RefreshCw, Search, Send,
@@ -134,6 +134,7 @@ function ChatShell({ user, onLoggedOut }: { user: User; onLoggedOut: () => void 
   const [connection, setConnection] = useState<ConnectionState>('connecting')
   const [loading, setLoading] = useState(true)
   const [loadingHistory, setLoadingHistory] = useState(false)
+  const [historyExhausted, setHistoryExhausted] = useState<Record<string, boolean>>({})
   const [composer, setComposer] = useState('')
   const [search, setSearch] = useState('')
   const [notice, setNotice] = useState('')
@@ -160,6 +161,9 @@ function ChatShell({ user, onLoggedOut }: { user: User; onLoggedOut: () => void 
   const pendingRef = useRef(new Map<string, { conversationId: string; clientMsgId: string }>())
   const discoveringRef = useRef(new Set<string>())
   const bottomRef = useRef<HTMLDivElement>(null)
+  const messagesPaneRef = useRef<HTMLDivElement>(null)
+  const olderScrollRef = useRef<string | null>(null)
+  const lastScrollRef = useRef({ conversationId: selectedId, messageId: '' })
   const fileRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => { conversationsRef.current = conversations }, [conversations])
@@ -342,7 +346,16 @@ function ChatShell({ user, onLoggedOut }: { user: User; onLoggedOut: () => void 
     return () => { active = false }
   }, [applyMessages, selectedId, user.id])
 
-  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages, selectedId])
+  useLayoutEffect(() => {
+    const messageId = (selectedId ? messages[selectedId]?.at(-1)?.id : '') ?? ''
+    if (olderScrollRef.current === selectedId && selectedId) {
+      messagesPaneRef.current?.scrollTo({ top: 0, behavior: 'smooth' })
+      olderScrollRef.current = null
+    } else if (lastScrollRef.current.conversationId !== selectedId || lastScrollRef.current.messageId !== messageId) {
+      bottomRef.current?.scrollIntoView({ behavior: 'instant' })
+    }
+    lastScrollRef.current = { conversationId: selectedId, messageId }
+  }, [messages, selectedId])
 
   function markRead(conversationId: string, sequence: number) {
     if (!sequence) return
@@ -354,13 +367,20 @@ function ChatShell({ user, onLoggedOut }: { user: User; onLoggedOut: () => void 
   }
 
   async function loadOlder() {
-    if (!selectedId || loadingHistory) return
+    if (!selectedId || loadingHistory || historyExhausted[selectedId]) return
     const first = (messages[selectedId] ?? []).find(message => message.seq > 0)
     if (!first) return
     setLoadingHistory(true)
     try {
       const page = await api.messages(selectedId, { beforeSeq: first.seq, limit: 50 })
-      applyMessages(selectedId, page.items)
+      setHistoryExhausted(current => ({ ...current, [selectedId]: !page.hasMore }))
+      if (page.items.length) {
+        if (selectedRef.current === selectedId) olderScrollRef.current = selectedId
+        applyMessages(selectedId, page.items)
+      } else if (selectedRef.current === selectedId) {
+        setHistoryExhausted(current => ({ ...current, [selectedId]: true }))
+        setNotice('没有更早的消息了')
+      }
     } catch (failure) { setNotice((failure as Error).message) }
     finally { setLoadingHistory(false) }
   }
@@ -559,8 +579,10 @@ function ChatShell({ user, onLoggedOut }: { user: User; onLoggedOut: () => void 
           <div className="chat-title"><strong>{conversationName(selected, user.id, detail)}</strong><small>{selected.type === 'GROUP' ? `${detail?.memberCount ?? selected.memberCount} 位成员` : connection === 'online' ? '实时连接中' : '消息将可靠送达'}</small></div>
           {selected.type === 'GROUP' && <button className="members-button" disabled={membersLoading} onClick={() => void openGroupMembers()}>{membersLoading ? <LoaderCircle className="spin" size={16} /> : <Users size={16} />}成员</button>}
         </header>
-        <div className="messages-pane">
-          {(messages[selected.id]?.length ?? 0) > 0 && <button className="load-older" onClick={loadOlder} disabled={loadingHistory}>{loadingHistory ? <LoaderCircle className="spin" size={15} /> : <RefreshCw size={15} />}加载更早消息</button>}
+        <div className="messages-pane" ref={messagesPaneRef}>
+          {(messages[selected.id]?.length ?? 0) > 0 && (historyExhausted[selected.id]
+            ? <div className="load-older" role="status">没有更早的消息了</div>
+            : <button className="load-older" onClick={loadOlder} disabled={loadingHistory}>{loadingHistory ? <LoaderCircle className="spin" size={15} /> : <RefreshCw size={15} />}{loadingHistory ? '正在加载更早消息…' : '加载更早消息'}</button>)}
           {(messages[selected.id] ?? []).map((message, index, all) => {
             const mine = message.senderId === user.id
             const sender = detail?.members?.find(member => member.userId === message.senderId)
